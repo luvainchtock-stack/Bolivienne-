@@ -8,7 +8,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
   html, body { margin: 0; padding: 0; background: #0e151c; }
   * { box-sizing: border-box; }
@@ -16,8 +15,12 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef } = React;
+<script>
+const {
+  useState,
+  useEffect,
+  useRef
+} = React;
 
 // ---------------------------------------------------------------------------
 // Firebase setup
@@ -33,24 +36,32 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-
 async function loadRoom(code) {
   try {
     const snap = await db.ref('rooms/' + code).once('value');
     return snap.exists() ? snap.val() : null;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
 async function saveRoom(code, state) {
   try {
     await db.ref('rooms/' + code).set(state);
-    return { ok: true };
+    return {
+      ok: true
+    };
   } catch (e) {
-    return { ok: false, err: (e && (e.message || e.toString())) || 'Erreur inconnue.' };
+    return {
+      ok: false,
+      err: e && (e.message || e.toString()) || 'Erreur inconnue.'
+    };
   }
 }
 function subscribeRoom(code, cb) {
   const ref = db.ref('rooms/' + code);
-  const handler = (snap) => { if (snap.exists()) cb(snap.val()); };
+  const handler = snap => {
+    if (snap.exists()) cb(snap.val());
+  };
   ref.on('value', handler);
   return () => ref.off('value', handler);
 }
@@ -60,18 +71,24 @@ function subscribeRoom(code, cb) {
 // ---------------------------------------------------------------------------
 const SUITS = ['S', 'H', 'D', 'C'];
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-const SUIT_SYMBOL = { S: '♠', H: '♥', D: '♦', C: '♣' };
+const SUIT_SYMBOL = {
+  S: '♠',
+  H: '♥',
+  D: '♦',
+  C: '♣'
+};
 const RED_SUITS = new Set(['H', 'D']);
 const CALL_NAME = 'BOLIVIENNE';
 const CALL_THRESHOLD = 9;
-
 function createDeck() {
   const deck = [];
   for (const r of RANKS) for (const s of SUITS) deck.push(r + s);
   deck.push('JK1', 'JK2');
   return deck;
 }
-function isJoker(c) { return c.startsWith('JK'); }
+function isJoker(c) {
+  return c.startsWith('JK');
+}
 function rankOf(c) {
   if (isJoker(c)) return null;
   const r = c.slice(0, -1);
@@ -81,11 +98,20 @@ function rankOf(c) {
   if (r === 'K') return 13;
   return parseInt(r, 10);
 }
-function suitOf(c) { return isJoker(c) ? null : c.slice(-1); }
-function valueOf(c) { if (isJoker(c)) return -1; return rankOf(c); }
-function rankLabel(c) { if (isJoker(c)) return '★'; return c.slice(0, -1); }
-function handValue(hand) { return hand.reduce((s, c) => s + valueOf(c), 0); }
-
+function suitOf(c) {
+  return isJoker(c) ? null : c.slice(-1);
+}
+function valueOf(c) {
+  if (isJoker(c)) return -1;
+  return rankOf(c);
+}
+function rankLabel(c) {
+  if (isJoker(c)) return '★';
+  return c.slice(0, -1);
+}
+function handValue(hand) {
+  return hand.reduce((s, c) => s + valueOf(c), 0);
+}
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -96,22 +122,23 @@ function shuffle(arr) {
 }
 function isValidSet(cards) {
   if (cards.length < 2) return false;
-  const nonJ = cards.filter((c) => !isJoker(c));
+  const nonJ = cards.filter(c => !isJoker(c));
   if (nonJ.length === 0) return false;
   return new Set(nonJ.map(rankOf)).size === 1;
 }
 function isValidRun(cards) {
   if (cards.length < 3) return false;
   const jokers = cards.filter(isJoker);
-  const nonJ = cards.filter((c) => !isJoker(c));
+  const nonJ = cards.filter(c => !isJoker(c));
   if (nonJ.length === 0) return false;
   if (new Set(nonJ.map(suitOf)).size !== 1) return false;
   const ranks = nonJ.map(rankOf);
   if (new Set(ranks).size !== ranks.length) return false;
-  const min = Math.min(...ranks), max = Math.max(...ranks);
+  const min = Math.min(...ranks),
+    max = Math.max(...ranks);
   const span = max - min + 1;
   if (span !== cards.length) return false;
-  return (span - nonJ.length) <= jokers.length;
+  return span - nonJ.length <= jokers.length;
 }
 function isValidDiscard(cards) {
   if (cards.length === 0) return false;
@@ -120,18 +147,25 @@ function isValidDiscard(cards) {
 }
 function orderRunAscending(cards) {
   const jokers = cards.filter(isJoker);
-  const nonJ = cards.filter((c) => !isJoker(c));
+  const nonJ = cards.filter(c => !isJoker(c));
   const ranks = nonJ.map(rankOf);
-  const min = Math.min(...ranks), max = Math.max(...ranks);
+  const min = Math.min(...ranks),
+    max = Math.max(...ranks);
   const byRank = {};
-  nonJ.forEach((c) => { byRank[rankOf(c)] = c; });
+  nonJ.forEach(c => {
+    byRank[rankOf(c)] = c;
+  });
   const seq = [];
   let jIdx = 0;
   for (let r = min; r <= max; r++) seq.push(byRank[r] || jokers[jIdx++]);
   return seq;
 }
 function uid() {
-  try { return crypto.randomUUID(); } catch (e) { return 'p-' + Math.random().toString(36).slice(2) + Date.now(); }
+  try {
+    return crypto.randomUUID();
+  } catch (e) {
+    return 'p-' + Math.random().toString(36).slice(2) + Date.now();
+  }
 }
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -142,27 +176,26 @@ function genCode() {
 const AVATAR_COLORS = ['#c9793f', '#4d8b7c', '#b3462c', '#7a8b4f', '#8a6bbf', '#c2a13a', '#4f7fa8', '#a8556f'];
 function avatarColor(name) {
   let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < name.length; i++) h = h * 31 + name.charCodeAt(i) >>> 0;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 function nextActiveId(state, fromId) {
-  const active = state.players.filter((p) => !p.eliminated);
-  const ids = active.map((p) => p.id);
+  const active = state.players.filter(p => !p.eliminated);
+  const ids = active.map(p => p.id);
   const idx = ids.indexOf(fromId);
   if (idx === -1) return ids[0];
   return ids[(idx + 1) % ids.length];
 }
 function dealHands(state, ids, deck) {
   for (const id of ids) {
-    const p = state.players.find((pp) => pp.id === id);
+    const p = state.players.find(pp => pp.id === id);
     p.hand = deck.splice(0, 5);
   }
 }
 function applyScore(player, pts, isFailedCallerFlat50) {
   const before = player.score;
   let after = before + pts;
-  if (after === 100) after = 50;
-  else if (after === 50) {
+  if (after === 100) after = 50;else if (after === 50) {
     const isException = before === 0 && pts === 50 && isFailedCallerFlat50;
     if (!isException) after = 0;
   }
@@ -173,11 +206,17 @@ function applyScore(player, pts, isFailedCallerFlat50) {
 // Mutators
 // ---------------------------------------------------------------------------
 function mutStartGame(state, byId) {
-  if (state.phase !== 'lobby') return { error: 'La partie a déjà commencé.' };
-  if (state.hostId !== byId) return { error: "Seul l'hôte peut lancer la partie." };
-  if (state.players.length < 2) return { error: 'Il faut au moins 2 joueurs.' };
+  if (state.phase !== 'lobby') return {
+    error: 'La partie a déjà commencé.'
+  };
+  if (state.hostId !== byId) return {
+    error: "Seul l'hôte peut lancer la partie."
+  };
+  if (state.players.length < 2) return {
+    error: 'Il faut au moins 2 joueurs.'
+  };
   const deck = shuffle(createDeck());
-  const ids = state.players.map((p) => p.id);
+  const ids = state.players.map(p => p.id);
   dealHands(state, ids, deck);
   state.discard = [deck.pop()];
   state.deck = deck;
@@ -187,20 +226,32 @@ function mutStartGame(state, byId) {
   state.phase = 'playing';
   state.roundNumber = 1;
   state.log = [...(state.log || []), `Table lancée avec ${state.players.length} joueurs.`].slice(-30);
-  return { state };
+  return {
+    state
+  };
 }
 function mutDraw(state, byId, source) {
-  if (state.phase !== 'playing') return { error: "La manche n'est pas en cours." };
-  if (state.currentPlayerId !== byId) return { error: "Ce n'est pas ton tour." };
-  if (state.turnPhase !== 'draw') return { error: 'Tu as déjà pioché ce tour.' };
-  const player = state.players.find((p) => p.id === byId);
+  if (state.phase !== 'playing') return {
+    error: "La manche n'est pas en cours."
+  };
+  if (state.currentPlayerId !== byId) return {
+    error: "Ce n'est pas ton tour."
+  };
+  if (state.turnPhase !== 'draw') return {
+    error: 'Tu as déjà pioché ce tour.'
+  };
+  const player = state.players.find(p => p.id === byId);
   let card;
   if (source === 'discard') {
-    if (state.discard.length === 0) return { error: 'La défausse est vide.' };
+    if (state.discard.length === 0) return {
+      error: 'La défausse est vide.'
+    };
     card = state.discard.pop();
   } else {
     if (state.deck.length === 0) {
-      if (state.discard.length <= 1) return { error: 'Plus de cartes à piocher.' };
+      if (state.discard.length <= 1) return {
+        error: 'Plus de cartes à piocher.'
+      };
       const top = state.discard.pop();
       state.deck = shuffle(state.discard);
       state.discard = [top];
@@ -210,45 +261,69 @@ function mutDraw(state, byId, source) {
   player.hand.push(card);
   state.turnPhase = 'discard';
   state.log = [...state.log, `${player.name} a pioché ${source === 'discard' ? 'la défausse' : 'le talon'}.`].slice(-30);
-  return { state };
+  return {
+    state
+  };
 }
 function mutDiscard(state, byId, cardIds) {
-  if (state.phase !== 'playing') return { error: "La manche n'est pas en cours." };
-  if (state.currentPlayerId !== byId) return { error: "Ce n'est pas ton tour." };
-  if (state.turnPhase !== 'discard') return { error: "Pioche d'abord." };
-  const player = state.players.find((p) => p.id === byId);
-  for (const c of cardIds) if (!player.hand.includes(c)) return { error: 'Sélection invalide.' };
-  if (!isValidDiscard(cardIds)) return { error: "Ce n'est ni une carte seule, ni une paire/brelan/carré, ni une suite valide." };
-  player.hand = player.hand.filter((c) => !cardIds.includes(c));
-  const toPush = (cardIds.length > 1 && isValidRun(cardIds)) ? orderRunAscending(cardIds) : cardIds;
+  if (state.phase !== 'playing') return {
+    error: "La manche n'est pas en cours."
+  };
+  if (state.currentPlayerId !== byId) return {
+    error: "Ce n'est pas ton tour."
+  };
+  if (state.turnPhase !== 'discard') return {
+    error: "Pioche d'abord."
+  };
+  const player = state.players.find(p => p.id === byId);
+  for (const c of cardIds) if (!player.hand.includes(c)) return {
+    error: 'Sélection invalide.'
+  };
+  if (!isValidDiscard(cardIds)) return {
+    error: "Ce n'est ni une carte seule, ni une paire/brelan/carré, ni une suite valide."
+  };
+  player.hand = player.hand.filter(c => !cardIds.includes(c));
+  const toPush = cardIds.length > 1 && isValidRun(cardIds) ? orderRunAscending(cardIds) : cardIds;
   state.discard.push(...toPush);
   state.log = [...state.log, `${player.name} a posé ${cardIds.length} carte${cardIds.length > 1 ? 's' : ''}.`].slice(-30);
   if (player.hand.length === 0) return mutEndRound(state, byId, true);
   state.currentPlayerId = nextActiveId(state, byId);
   state.turnPhase = 'draw';
-  return { state };
+  return {
+    state
+  };
 }
 function mutCallBolivienne(state, byId) {
-  if (state.phase !== 'playing') return { error: "La manche n'est pas en cours." };
-  if (state.currentPlayerId !== byId) return { error: "Ce n'est pas ton tour." };
-  if (state.turnPhase !== 'draw') return { error: `Tu ne peux annoncer ${CALL_NAME} qu'en début de tour, avant de piocher.` };
-  const player = state.players.find((p) => p.id === byId);
-  if (handValue(player.hand) > CALL_THRESHOLD) return { error: `Ta main doit valoir ${CALL_THRESHOLD} points ou moins.` };
+  if (state.phase !== 'playing') return {
+    error: "La manche n'est pas en cours."
+  };
+  if (state.currentPlayerId !== byId) return {
+    error: "Ce n'est pas ton tour."
+  };
+  if (state.turnPhase !== 'draw') return {
+    error: `Tu ne peux annoncer ${CALL_NAME} qu'en début de tour, avant de piocher.`
+  };
+  const player = state.players.find(p => p.id === byId);
+  if (handValue(player.hand) > CALL_THRESHOLD) return {
+    error: `Ta main doit valoir ${CALL_THRESHOLD} points ou moins.`
+  };
   return mutEndRound(state, byId, false);
 }
 function mutEndRound(state, callerId, selfEmptied) {
-  const active = state.players.filter((p) => !p.eliminated);
+  const active = state.players.filter(p => !p.eliminated);
   const values = {};
   for (const p of active) values[p.id] = handValue(p.hand);
   const results = {};
   const hands = {};
   for (const p of active) hands[p.id] = [...p.hand];
-  let tie = false, lower = false, callerWon = true;
+  let tie = false,
+    lower = false,
+    callerWon = true;
   if (!selfEmptied) {
     const callerVal = values[callerId];
-    const others = active.filter((p) => p.id !== callerId);
-    const tiers = others.filter((p) => values[p.id] === callerVal);
-    const lowers = others.filter((p) => values[p.id] < callerVal);
+    const others = active.filter(p => p.id !== callerId);
+    const tiers = others.filter(p => values[p.id] === callerVal);
+    const lowers = others.filter(p => values[p.id] < callerVal);
     tie = tiers.length > 0;
     lower = lowers.length > 0;
     callerWon = !tie && !lower;
@@ -271,28 +346,46 @@ function mutEndRound(state, callerId, selfEmptied) {
     }
   }
   for (const p of state.players) if (!p.eliminated && p.score > 100) p.eliminated = true;
-  const stillActive = state.players.filter((p) => !p.eliminated);
-  const callerName = state.players.find((p) => p.id === callerId)?.name;
-  const winnerId = selfEmptied ? callerId : (callerWon ? callerId : null);
-  state.lastRound = { callerId, callerName, values, results, hands, selfEmptied, tie, lower, callerWon, callerBonus, winnerId };
-  if (selfEmptied) state.log = [...state.log, `${callerName} a vidé sa main et remporte la manche !`].slice(-30);
-  else if (callerWon) state.log = [...state.log, `${callerName} annonce ${CALL_NAME} et remporte la manche !`].slice(-30);
-  else {
+  const stillActive = state.players.filter(p => !p.eliminated);
+  const callerName = state.players.find(p => p.id === callerId)?.name;
+  const winnerId = selfEmptied ? callerId : callerWon ? callerId : null;
+  state.lastRound = {
+    callerId,
+    callerName,
+    values,
+    results,
+    hands,
+    selfEmptied,
+    tie,
+    lower,
+    callerWon,
+    callerBonus,
+    winnerId
+  };
+  if (selfEmptied) state.log = [...state.log, `${callerName} a vidé sa main et remporte la manche !`].slice(-30);else if (callerWon) state.log = [...state.log, `${callerName} annonce ${CALL_NAME} et remporte la manche !`].slice(-30);else {
     const parts = [];
     if (lower) parts.push("quelqu'un avait moins (+50)");
     if (tie) parts.push('égalité (+25)');
     state.log = [...state.log, `${callerName} annonce ${CALL_NAME} raté : ${parts.join(' et ')}.`].slice(-30);
   }
-  if (stillActive.length <= 1) { state.phase = 'gameOver'; state.winnerId = stillActive[0]?.id || null; }
-  else state.phase = 'roundEnd';
-  return { state };
+  if (stillActive.length <= 1) {
+    state.phase = 'gameOver';
+    state.winnerId = stillActive[0]?.id || null;
+  } else state.phase = 'roundEnd';
+  return {
+    state
+  };
 }
 function mutNextRound(state, byId) {
-  if (state.phase !== 'roundEnd') return { error: "On n'est pas entre deux manches." };
-  if (state.hostId !== byId) return { error: "Seul l'hôte peut lancer la manche suivante." };
-  const active = state.players.filter((p) => !p.eliminated);
+  if (state.phase !== 'roundEnd') return {
+    error: "On n'est pas entre deux manches."
+  };
+  if (state.hostId !== byId) return {
+    error: "Seul l'hôte peut lancer la manche suivante."
+  };
+  const active = state.players.filter(p => !p.eliminated);
   const deck = shuffle(createDeck());
-  dealHands(state, active.map((p) => p.id), deck);
+  dealHands(state, active.map(p => p.id), deck);
   state.discard = [deck.pop()];
   state.deck = deck;
   state.dealerIndex = (state.dealerIndex + 1) % active.length;
@@ -301,26 +394,55 @@ function mutNextRound(state, byId) {
   state.roundNumber += 1;
   state.phase = 'playing';
   state.log = [...state.log, `Manche ${state.roundNumber} !`].slice(-30);
-  return { state };
+  return {
+    state
+  };
 }
 function mutJoin(state, name, existingId) {
   const trimmed = name.trim();
-  const found = state.players.find((p) => p.name.toLowerCase() === trimmed.toLowerCase());
-  if (found) { found.connected = true; return { state, myId: found.id }; }
-  if (state.phase !== 'lobby') return { error: "Cette table a déjà commencé. Demande à l'hôte une nouvelle table." };
+  const found = state.players.find(p => p.name.toLowerCase() === trimmed.toLowerCase());
+  if (found) {
+    found.connected = true;
+    return {
+      state,
+      myId: found.id
+    };
+  }
+  if (state.phase !== 'lobby') return {
+    error: "Cette table a déjà commencé. Demande à l'hôte une nouvelle table."
+  };
   const id = existingId || uid();
-  state.players.push({ id, name: trimmed, score: 0, hand: [], connected: true, eliminated: false });
+  state.players.push({
+    id,
+    name: trimmed,
+    score: 0,
+    hand: [],
+    connected: true,
+    eliminated: false
+  });
   if (!state.hostId) state.hostId = id;
-  return { state, myId: id };
+  return {
+    state,
+    myId: id
+  };
 }
 
 // ---------------------------------------------------------------------------
 // UI atoms
 // ---------------------------------------------------------------------------
-function Shell({ children }) {
-  return (
-    <div style={{ minHeight: '100vh', background: 'radial-gradient(ellipse at top, #182430 0%, #0e151c 70%)', color: '#ece6d6', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', padding: 16, boxSizing: 'border-box' }}>
-      <style>{`
+function Shell({
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: '100vh',
+      background: 'radial-gradient(ellipse at top, #182430 0%, #0e151c 70%)',
+      color: '#ece6d6',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      padding: 16,
+      boxSizing: 'border-box'
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `
         .bo-title { font-family: Georgia, 'Iowan Old Style', serif; }
         .bo-btn { font-family: inherit; cursor: pointer; border: none; border-radius: 10px; padding: 12px 20px; font-size: 15px; font-weight: 600; transition: transform 100ms ease, opacity 100ms ease; }
         .bo-btn:active { transform: scale(0.97); }
@@ -331,216 +453,656 @@ function Shell({ children }) {
         .bo-input { font-family: inherit; background: #0e151c; border: 1px solid #2c4351; color: #ece6d6; border-radius: 8px; padding: 10px 12px; font-size: 15px; width: 100%; box-sizing: border-box; }
         .bo-chip { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 6px 16px; font-weight: 700; letter-spacing: 3px; background: #d99a3c; color: #1a1208; font-family: Georgia, serif; }
         .bo-card-row { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 14px; }
-      `}</style>
-      {children}
-    </div>
-  );
+      `), children);
 }
-function CenteredMessage({ text }) { return <Shell><div style={{ textAlign: 'center', marginTop: 100, color: '#8b96a3' }}>{text}</div></Shell>; }
-function Card({ code, size = 'md', selected, onClick, faceDown }) {
+function CenteredMessage({
+  text
+}) {
+  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      marginTop: 100,
+      color: '#8b96a3'
+    }
+  }, text));
+}
+function Card({
+  code,
+  size = 'md',
+  selected,
+  onClick,
+  faceDown
+}) {
   const w = size === 'sm' ? 34 : size === 'lg' ? 58 : 46;
   const h = w * 1.42;
   if (faceDown) {
-    return <div onClick={onClick} style={{ width: w, height: h, borderRadius: 8, cursor: onClick ? 'pointer' : 'default', background: 'repeating-linear-gradient(135deg,#1b2a35,#1b2a35 6px,#223543 6px,#223543 12px)', border: '1px solid #2c4351', boxShadow: '0 2px 6px rgba(0,0,0,0.4)', flexShrink: 0 }} />;
+    return /*#__PURE__*/React.createElement("div", {
+      onClick: onClick,
+      style: {
+        width: w,
+        height: h,
+        borderRadius: 8,
+        cursor: onClick ? 'pointer' : 'default',
+        background: 'repeating-linear-gradient(135deg,#1b2a35,#1b2a35 6px,#223543 6px,#223543 12px)',
+        border: '1px solid #2c4351',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+        flexShrink: 0
+      }
+    });
   }
   const red = RED_SUITS.has(suitOf(code));
   const joker = isJoker(code);
   const color = joker ? '#8a6bbf' : red ? '#a5432c' : '#23262b';
-  return (
-    <div onClick={onClick} style={{ width: w, height: h, borderRadius: 8, background: '#f6efe0', border: selected ? '2px solid #d99a3c' : '1px solid #cbbfa0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: w * 0.09, cursor: onClick ? 'pointer' : 'default', transform: selected ? 'translateY(-10px)' : 'none', transition: 'transform 120ms ease, box-shadow 120ms ease', boxShadow: selected ? '0 6px 14px rgba(0,0,0,0.35)' : '0 2px 5px rgba(0,0,0,0.25)', userSelect: 'none', flexShrink: 0 }}>
-      <div style={{ fontFamily: 'Georgia, "Iowan Old Style", serif', fontWeight: 700, fontSize: w * 0.30, lineHeight: 1, color }}>{rankLabel(code)}</div>
-      <div style={{ fontSize: w * 0.36, alignSelf: 'center', color }}>{joker ? '★' : SUIT_SYMBOL[suitOf(code)]}</div>
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: onClick,
+    style: {
+      width: w,
+      height: h,
+      borderRadius: 8,
+      background: '#f6efe0',
+      border: selected ? '2px solid #d99a3c' : '1px solid #cbbfa0',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      padding: w * 0.09,
+      cursor: onClick ? 'pointer' : 'default',
+      transform: selected ? 'translateY(-10px)' : 'none',
+      transition: 'transform 120ms ease, box-shadow 120ms ease',
+      boxShadow: selected ? '0 6px 14px rgba(0,0,0,0.35)' : '0 2px 5px rgba(0,0,0,0.25)',
+      userSelect: 'none',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'Georgia, "Iowan Old Style", serif',
+      fontWeight: 700,
+      fontSize: w * 0.30,
+      lineHeight: 1,
+      color
+    }
+  }, rankLabel(code)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: w * 0.36,
+      alignSelf: 'center',
+      color
+    }
+  }, joker ? '★' : SUIT_SYMBOL[suitOf(code)]));
 }
 
 // ---------------------------------------------------------------------------
 // Screens
 // ---------------------------------------------------------------------------
-function Landing({ nameInput, setNameInput, codeInput, setCodeInput, handleCreate, handleJoin, error, busy }) {
+function Landing({
+  nameInput,
+  setNameInput,
+  codeInput,
+  setCodeInput,
+  handleCreate,
+  handleJoin,
+  error,
+  busy
+}) {
   const [mode, setMode] = useState('create');
-  return (
-    <Shell>
-      <div style={{ maxWidth: 380, margin: '40px auto 0' }}>
-        <h1 className="bo-title" style={{ fontSize: 40, textAlign: 'center', margin: '0 0 4px', color: '#d99a3c' }}>{CALL_NAME}</h1>
-        <p style={{ textAlign: 'center', color: '#8b96a3', marginTop: 0, marginBottom: 28 }}>La main la plus basse gagne. Annonce-la avant les autres.</p>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-          <button className={'bo-btn ' + (mode === 'create' ? 'bo-btn-primary' : 'bo-btn-secondary')} style={{ flex: 1 }} onClick={() => setMode('create')}>Nouvelle table</button>
-          <button className={'bo-btn ' + (mode === 'join' ? 'bo-btn-primary' : 'bo-btn-secondary')} style={{ flex: 1 }} onClick={() => setMode('join')}>Rejoindre</button>
-        </div>
-        <label style={{ fontSize: 13, color: '#8b96a3' }}>Ton prénom</label>
-        <input className="bo-input" style={{ marginTop: 6, marginBottom: 14 }} value={nameInput} onChange={(e) => setNameInput(e.target.value)} maxLength={18} placeholder="ex : Dana" />
-        {mode === 'join' && (
-          <>
-            <label style={{ fontSize: 13, color: '#8b96a3' }}>Code de la table</label>
-            <input className="bo-input" style={{ marginTop: 6, marginBottom: 14, textTransform: 'uppercase', letterSpacing: 3 }} value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} maxLength={4} placeholder="ABCD" />
-          </>
-        )}
-        {error && <div style={{ color: '#e18a6e', fontSize: 14, marginBottom: 12 }}>{error}</div>}
-        <button className="bo-btn bo-btn-primary" style={{ width: '100%' }} disabled={busy} onClick={mode === 'create' ? handleCreate : handleJoin}>
-          {busy ? 'Un instant…' : mode === 'create' ? 'Créer la table' : 'Rejoindre la table'}
-        </button>
-        <p style={{ fontSize: 12.5, color: '#5c6773', marginTop: 20, lineHeight: 1.5 }}>
-          Crée une table, puis partage le code à 4 lettres et ce lien à tes amis.
-        </p>
-      </div>
-    </Shell>
-  );
+  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 380,
+      margin: '40px auto 0'
+    }
+  }, /*#__PURE__*/React.createElement("h1", {
+    className: "bo-title",
+    style: {
+      fontSize: 40,
+      textAlign: 'center',
+      margin: '0 0 4px',
+      color: '#d99a3c'
+    }
+  }, CALL_NAME), /*#__PURE__*/React.createElement("p", {
+    style: {
+      textAlign: 'center',
+      color: '#8b96a3',
+      marginTop: 0,
+      marginBottom: 28
+    }
+  }, "La main la plus basse gagne. Annonce-la avant les autres."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: 'bo-btn ' + (mode === 'create' ? 'bo-btn-primary' : 'bo-btn-secondary'),
+    style: {
+      flex: 1
+    },
+    onClick: () => setMode('create')
+  }, "Nouvelle table"), /*#__PURE__*/React.createElement("button", {
+    className: 'bo-btn ' + (mode === 'join' ? 'bo-btn-primary' : 'bo-btn-secondary'),
+    style: {
+      flex: 1
+    },
+    onClick: () => setMode('join')
+  }, "Rejoindre")), /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 13,
+      color: '#8b96a3'
+    }
+  }, "Ton prénom"), /*#__PURE__*/React.createElement("input", {
+    className: "bo-input",
+    style: {
+      marginTop: 6,
+      marginBottom: 14
+    },
+    value: nameInput,
+    onChange: e => setNameInput(e.target.value),
+    maxLength: 18,
+    placeholder: "ex : Dana"
+  }), mode === 'join' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 13,
+      color: '#8b96a3'
+    }
+  }, "Code de la table"), /*#__PURE__*/React.createElement("input", {
+    className: "bo-input",
+    style: {
+      marginTop: 6,
+      marginBottom: 14,
+      textTransform: 'uppercase',
+      letterSpacing: 3
+    },
+    value: codeInput,
+    onChange: e => setCodeInput(e.target.value.toUpperCase()),
+    maxLength: 4,
+    placeholder: "ABCD"
+  })), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#e18a6e',
+      fontSize: 14,
+      marginBottom: 12
+    }
+  }, error), /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-primary",
+    style: {
+      width: '100%'
+    },
+    disabled: busy,
+    onClick: mode === 'create' ? handleCreate : handleJoin
+  }, busy ? 'Un instant…' : mode === 'create' ? 'Créer la table' : 'Rejoindre la table'), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12.5,
+      color: '#5c6773',
+      marginTop: 20,
+      lineHeight: 1.5
+    }
+  }, "Crée une table, puis partage le code à 4 lettres et ce lien à tes amis.")));
 }
-function Lobby({ room, myId, isHost, onStart, busy, error }) {
-  return (
-    <Shell>
-      <div style={{ maxWidth: 420, margin: '20px auto 0' }}>
-        <div style={{ textAlign: 'center', marginBottom: 22 }}>
-          <div style={{ fontSize: 12, color: '#8b96a3', letterSpacing: 2, marginBottom: 8 }}>CODE DE LA TABLE</div>
-          <div className="bo-chip" style={{ fontSize: 22 }}>{room.code}</div>
-        </div>
-        <h2 className="bo-title" style={{ fontSize: 20, color: '#ece6d6' }}>Joueurs ({room.players.length})</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-          {room.players.map((p) => (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#16212c', border: '1px solid #223543', borderRadius: 10, padding: '10px 14px' }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: avatarColor(p.name), display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>{p.name[0]?.toUpperCase()}</div>
-              <div style={{ flex: 1 }}>{p.name}{p.id === myId ? ' (toi)' : ''}</div>
-              {room.hostId === p.id && <span style={{ fontSize: 11, color: '#d99a3c', fontWeight: 700 }}>HÔTE</span>}
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 12, color: '#5c6773', lineHeight: 1.6, marginBottom: 20, background: '#141d26', borderRadius: 10, padding: 12 }}>
-          As=1, J=11, D=12, R=13, Joker=-1 · Annonce {CALL_NAME} à {CALL_THRESHOLD} pts ou moins · Égalité = +25, quelqu'un en dessous = +50 (cumulables) · 50 pile → 0 · 100 pile → 50 · Éliminé si &gt;100.
-        </div>
-        {error && <div style={{ color: '#e18a6e', fontSize: 14, marginBottom: 12 }}>{error}</div>}
-        {isHost ? (
-          <button className="bo-btn bo-btn-primary" style={{ width: '100%' }} disabled={busy || room.players.length < 2} onClick={onStart}>
-            {room.players.length < 2 ? 'En attente de joueurs…' : busy ? 'Lancement…' : 'Lancer la partie'}
-          </button>
-        ) : <div style={{ textAlign: 'center', color: '#8b96a3' }}>En attente que l'hôte lance la partie…</div>}
-      </div>
-    </Shell>
-  );
+function Lobby({
+  room,
+  myId,
+  isHost,
+  onStart,
+  busy,
+  error
+}) {
+  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 420,
+      margin: '20px auto 0'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#8b96a3',
+      letterSpacing: 2,
+      marginBottom: 8
+    }
+  }, "CODE DE LA TABLE"), /*#__PURE__*/React.createElement("div", {
+    className: "bo-chip",
+    style: {
+      fontSize: 22
+    }
+  }, room.code)), /*#__PURE__*/React.createElement("h2", {
+    className: "bo-title",
+    style: {
+      fontSize: 20,
+      color: '#ece6d6'
+    }
+  }, "Joueurs (", room.players.length, ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      marginBottom: 20
+    }
+  }, room.players.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.id,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      background: '#16212c',
+      border: '1px solid #223543',
+      borderRadius: 10,
+      padding: '10px 14px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 30,
+      height: 30,
+      borderRadius: '50%',
+      background: avatarColor(p.name),
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontWeight: 700,
+      fontSize: 14
+    }
+  }, p.name[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, p.name, p.id === myId ? ' (toi)' : ''), room.hostId === p.id && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: '#d99a3c',
+      fontWeight: 700
+    }
+  }, "HÔTE")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#5c6773',
+      lineHeight: 1.6,
+      marginBottom: 20,
+      background: '#141d26',
+      borderRadius: 10,
+      padding: 12
+    }
+  }, "As=1, J=11, D=12, R=13, Joker=-1 · Annonce ", CALL_NAME, " à ", CALL_THRESHOLD, " pts ou moins · Égalité = +25, quelqu'un en dessous = +50 (cumulables) · 50 pile → 0 · 100 pile → 50 · Éliminé si >100."), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#e18a6e',
+      fontSize: 14,
+      marginBottom: 12
+    }
+  }, error), isHost ? /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-primary",
+    style: {
+      width: '100%'
+    },
+    disabled: busy || room.players.length < 2,
+    onClick: onStart
+  }, room.players.length < 2 ? 'En attente de joueurs…' : busy ? 'Lancement…' : 'Lancer la partie') : /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      color: '#8b96a3'
+    }
+  }, "En attente que l'hôte lance la partie…")));
 }
-function GameTable({ room, me, myId, isMyTurn, selected, toggleCard, onDraw, onDiscard, onCall, busy, error }) {
-  const active = room.players.filter((p) => !p.eliminated);
-  const others = active.filter((p) => p.id !== myId);
+function GameTable({
+  room,
+  me,
+  myId,
+  isMyTurn,
+  selected,
+  toggleCard,
+  onDraw,
+  onDiscard,
+  onCall,
+  busy,
+  error
+}) {
+  const active = room.players.filter(p => !p.eliminated);
+  const others = active.filter(p => p.id !== myId);
   const topDiscard = room.discard[room.discard.length - 1];
   const myValue = me ? handValue(me.hand) : 0;
   const canCall = isMyTurn && room.turnPhase === 'draw' && myValue <= CALL_THRESHOLD;
   const selValue = selected.reduce((s, c) => s + valueOf(c), 0);
   const validSelection = selected.length > 0 && isValidDiscard(selected);
-  return (
-    <Shell>
-      <div style={{ maxWidth: 520, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span className="bo-title" style={{ color: '#d99a3c', fontSize: 20 }}>Manche {room.roundNumber}</span>
-          <span style={{ fontSize: 12, color: '#8b96a3' }}>Table {room.code}</span>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-          {others.map((p) => (
-            <div key={p.id} style={{ flex: '1 1 100px', background: '#16212c', border: room.currentPlayerId === p.id ? '2px solid #d99a3c' : '1px solid #223543', borderRadius: 10, padding: '8px 10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: avatarColor(p.name), fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{p.name[0]?.toUpperCase()}</div>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
-              </div>
-              <div style={{ fontSize: 11.5, color: '#8b96a3' }}>{p.hand.length} cartes · {p.score} pts</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 22, alignItems: 'center', margin: '8px 0 20px' }}>
-          <div style={{ textAlign: 'center' }}>
-            <Card faceDown onClick={isMyTurn && room.turnPhase === 'draw' ? () => onDraw('deck') : undefined} size="lg" />
-            <div style={{ fontSize: 11, color: '#8b96a3', marginTop: 6 }}>Talon ({room.deck.length})</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            {topDiscard && <Card code={topDiscard} size="lg" onClick={isMyTurn && room.turnPhase === 'draw' ? () => onDraw('discard') : undefined} />}
-            <div style={{ fontSize: 11, color: '#8b96a3', marginTop: 6 }}>Défausse</div>
-          </div>
-        </div>
-        <div style={{ textAlign: 'center', marginBottom: 14, minHeight: 20 }}>
-          {error && <div style={{ color: '#e18a6e', fontSize: 13.5 }}>{error}</div>}
-          {!error && isMyTurn && room.turnPhase === 'draw' && <div style={{ color: '#d99a3c', fontSize: 13.5 }}>À toi — pioche une carte, ou annonce {CALL_NAME}.</div>}
-          {!error && isMyTurn && room.turnPhase === 'discard' && <div style={{ color: '#d99a3c', fontSize: 13.5 }}>Sélectionne des cartes à poser.</div>}
-          {!error && !isMyTurn && <div style={{ color: '#8b96a3', fontSize: 13.5 }}>En attente de {room.players.find((p) => p.id === room.currentPlayerId)?.name}…</div>}
-        </div>
-        {isMyTurn && room.turnPhase === 'discard' && (
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 16 }}>
-            <button className="bo-btn bo-btn-primary" disabled={busy || !validSelection} onClick={onDiscard}>Poser {selected.length > 0 ? `(${selValue} pts)` : ''}</button>
-          </div>
-        )}
-        {canCall && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-            <button className="bo-btn bo-btn-danger" disabled={busy} onClick={onCall}>Annoncer {CALL_NAME} !</button>
-          </div>
-        )}
-        <div style={{ borderTop: '1px solid #223543', paddingTop: 14, marginBottom: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Ta main</span>
-            <span style={{ fontSize: 13, color: '#8b96a3' }}>{myValue} pts</span>
-          </div>
-          <div className="bo-card-row">{me?.hand.map((c) => <Card key={c} code={c} selected={selected.includes(c)} onClick={() => toggleCard(c)} />)}</div>
-        </div>
-        <details style={{ marginTop: 10 }}>
-          <summary style={{ cursor: 'pointer', fontSize: 12.5, color: '#8b96a3' }}>Journal de la table</summary>
-          <div style={{ fontSize: 12, color: '#8b96a3', maxHeight: 120, overflowY: 'auto', marginTop: 6 }}>{[...room.log].reverse().map((l, i) => <div key={i} style={{ padding: '2px 0' }}>{l}</div>)}</div>
-        </details>
-      </div>
-    </Shell>
-  );
+  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 520,
+      margin: '0 auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "bo-title",
+    style: {
+      color: '#d99a3c',
+      fontSize: 20
+    }
+  }, "Manche ", room.roundNumber), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: '#8b96a3'
+    }
+  }, "Table ", room.code)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 16
+    }
+  }, others.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.id,
+    style: {
+      flex: '1 1 100px',
+      background: '#16212c',
+      border: room.currentPlayerId === p.id ? '2px solid #d99a3c' : '1px solid #223543',
+      borderRadius: 10,
+      padding: '8px 10px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 22,
+      height: 22,
+      borderRadius: '50%',
+      background: avatarColor(p.name),
+      fontSize: 11,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontWeight: 700
+    }
+  }, p.name[0]?.toUpperCase()), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, p.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: '#8b96a3'
+    }
+  }, p.hand.length, " cartes · ", p.score, " pts")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'center',
+      gap: 22,
+      alignItems: 'center',
+      margin: '8px 0 20px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement(Card, {
+    faceDown: true,
+    onClick: isMyTurn && room.turnPhase === 'draw' ? () => onDraw('deck') : undefined,
+    size: "lg"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#8b96a3',
+      marginTop: 6
+    }
+  }, "Talon (", room.deck.length, ")")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center'
+    }
+  }, topDiscard && /*#__PURE__*/React.createElement(Card, {
+    code: topDiscard,
+    size: "lg",
+    onClick: isMyTurn && room.turnPhase === 'draw' ? () => onDraw('discard') : undefined
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#8b96a3',
+      marginTop: 6
+    }
+  }, "Défausse"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      marginBottom: 14,
+      minHeight: 20
+    }
+  }, error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#e18a6e',
+      fontSize: 13.5
+    }
+  }, error), !error && isMyTurn && room.turnPhase === 'draw' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#d99a3c',
+      fontSize: 13.5
+    }
+  }, "À toi — pioche une carte, ou annonce ", CALL_NAME, "."), !error && isMyTurn && room.turnPhase === 'discard' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#d99a3c',
+      fontSize: 13.5
+    }
+  }, "Sélectionne des cartes à poser."), !error && !isMyTurn && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#8b96a3',
+      fontSize: 13.5
+    }
+  }, "En attente de ", room.players.find(p => p.id === room.currentPlayerId)?.name, "…")), isMyTurn && room.turnPhase === 'discard' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 10,
+      justifyContent: 'center',
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-primary",
+    disabled: busy || !validSelection,
+    onClick: onDiscard
+  }, "Poser ", selected.length > 0 ? `(${selValue} pts)` : '')), canCall && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'center',
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-danger",
+    disabled: busy,
+    onClick: onCall
+  }, "Annoncer ", CALL_NAME, " !")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: '1px solid #223543',
+      paddingTop: 14,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "Ta main"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: '#8b96a3'
+    }
+  }, myValue, " pts")), /*#__PURE__*/React.createElement("div", {
+    className: "bo-card-row"
+  }, me?.hand.map(c => /*#__PURE__*/React.createElement(Card, {
+    key: c,
+    code: c,
+    selected: selected.includes(c),
+    onClick: () => toggleCard(c)
+  })))), /*#__PURE__*/React.createElement("details", {
+    style: {
+      marginTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("summary", {
+    style: {
+      cursor: 'pointer',
+      fontSize: 12.5,
+      color: '#8b96a3'
+    }
+  }, "Journal de la table"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: '#8b96a3',
+      maxHeight: 120,
+      overflowY: 'auto',
+      marginTop: 6
+    }
+  }, [...room.log].reverse().map((l, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      padding: '2px 0'
+    }
+  }, l))))));
 }
-function RoundEnd({ room, isHost, onNext, busy, error }) {
+function RoundEnd({
+  room,
+  isHost,
+  onNext,
+  busy,
+  error
+}) {
   const lr = room.lastRound;
-  return (
-    <Shell>
-      <div style={{ maxWidth: 460, margin: '10px auto' }}>
-        <h2 className="bo-title" style={{ color: '#d99a3c', textAlign: 'center' }}>{lr.selfEmptied || lr.callerWon ? `${CALL_NAME} !` : `${CALL_NAME} raté`}</h2>
-        <p style={{ textAlign: 'center', color: '#8b96a3', marginTop: -6 }}>
-          {lr.selfEmptied && `${lr.callerName} a vidé sa main et remporte la manche.`}
-          {!lr.selfEmptied && lr.callerWon && `${lr.callerName} avait la main la plus basse.`}
-          {!lr.selfEmptied && !lr.callerWon && `${lr.callerName} prend ${lr.callerBonus > 0 ? '+' + lr.callerBonus : '0'} pt${lr.callerBonus > 1 ? 's' : ''} de pénalité${lr.tie && lr.lower ? ' (égalité + main plus basse cumulées)' : lr.lower ? ' (main plus basse)' : ' (égalité)'}.`}
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '18px 0' }}>
-          {room.players.map((p) => {
-            const val = lr.values?.[p.id];
-            const pts = lr.results?.[p.id];
-            const hand = lr.hands?.[p.id];
-            if (val === undefined) return null;
-            const isWinner = p.id === lr.winnerId;
-            return (
-              <div key={p.id} style={{ background: isWinner ? 'rgba(217,154,60,0.12)' : '#16212c', border: isWinner ? '1px solid #d99a3c' : '1px solid #223543', borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontWeight: 600 }}>{p.name}{isWinner ? ' — gagnant' : ''}{p.eliminated ? ' (éliminé)' : ''}</span>
-                  <span style={{ color: pts === 0 ? '#d99a3c' : '#e18a6e' }}>+{pts} → {p.score} pts</span>
-                </div>
-                <div className="bo-card-row" style={{ padding: 0 }}>{hand?.map((c) => <Card key={c} code={c} size="sm" />)}</div>
-              </div>
-            );
-          })}
-        </div>
-        {error && <div style={{ color: '#e18a6e', fontSize: 13.5, textAlign: 'center', marginBottom: 10 }}>{error}</div>}
-        {isHost ? (
-          <button className="bo-btn bo-btn-primary" style={{ width: '100%' }} disabled={busy} onClick={onNext}>{busy ? 'Distribution…' : 'Manche suivante'}</button>
-        ) : <div style={{ textAlign: 'center', color: '#8b96a3' }}>En attente que l'hôte distribue la manche suivante…</div>}
-      </div>
-    </Shell>
-  );
+  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 460,
+      margin: '10px auto'
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "bo-title",
+    style: {
+      color: '#d99a3c',
+      textAlign: 'center'
+    }
+  }, lr.selfEmptied || lr.callerWon ? `${CALL_NAME} !` : `${CALL_NAME} raté`), /*#__PURE__*/React.createElement("p", {
+    style: {
+      textAlign: 'center',
+      color: '#8b96a3',
+      marginTop: -6
+    }
+  }, lr.selfEmptied && `${lr.callerName} a vidé sa main et remporte la manche.`, !lr.selfEmptied && lr.callerWon && `${lr.callerName} avait la main la plus basse.`, !lr.selfEmptied && !lr.callerWon && `${lr.callerName} prend ${lr.callerBonus > 0 ? '+' + lr.callerBonus : '0'} pt${lr.callerBonus > 1 ? 's' : ''} de pénalité${lr.tie && lr.lower ? ' (égalité + main plus basse cumulées)' : lr.lower ? ' (main plus basse)' : ' (égalité)'}.`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      margin: '18px 0'
+    }
+  }, room.players.map(p => {
+    const val = lr.values?.[p.id];
+    const pts = lr.results?.[p.id];
+    const hand = lr.hands?.[p.id];
+    if (val === undefined) return null;
+    const isWinner = p.id === lr.winnerId;
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id,
+      style: {
+        background: isWinner ? 'rgba(217,154,60,0.12)' : '#16212c',
+        border: isWinner ? '1px solid #d99a3c' : '1px solid #223543',
+        borderRadius: 10,
+        padding: '10px 12px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 600
+      }
+    }, p.name, isWinner ? ' — gagnant' : '', p.eliminated ? ' (éliminé)' : ''), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: pts === 0 ? '#d99a3c' : '#e18a6e'
+      }
+    }, "+", pts, " → ", p.score, " pts")), /*#__PURE__*/React.createElement("div", {
+      className: "bo-card-row",
+      style: {
+        padding: 0
+      }
+    }, hand?.map(c => /*#__PURE__*/React.createElement(Card, {
+      key: c,
+      code: c,
+      size: "sm"
+    }))));
+  })), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#e18a6e',
+      fontSize: 13.5,
+      textAlign: 'center',
+      marginBottom: 10
+    }
+  }, error), isHost ? /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-primary",
+    style: {
+      width: '100%'
+    },
+    disabled: busy,
+    onClick: onNext
+  }, busy ? 'Distribution…' : 'Manche suivante') : /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      color: '#8b96a3'
+    }
+  }, "En attente que l'hôte distribue la manche suivante…")));
 }
-function GameOver({ room, myId }) {
-  const winner = room.players.find((p) => p.id === room.winnerId);
+function GameOver({
+  room,
+  myId
+}) {
+  const winner = room.players.find(p => p.id === room.winnerId);
   const ranked = [...room.players].sort((a, b) => a.score - b.score);
-  return (
-    <Shell>
-      <div style={{ maxWidth: 420, margin: '40px auto', textAlign: 'center' }}>
-        <div style={{ fontSize: 13, color: '#8b96a3', letterSpacing: 2 }}>FIN DE LA PARTIE</div>
-        <h1 className="bo-title" style={{ fontSize: 32, color: '#d99a3c', margin: '6px 0 24px' }}>{winner?.name} remporte la table !</h1>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {ranked.map((p, i) => (
-            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', background: '#16212c', border: '1px solid #223543', borderRadius: 10, padding: '10px 14px' }}>
-              <span>{i + 1}. {p.name}{p.id === myId ? ' (toi)' : ''}</span>
-              <span style={{ color: '#8b96a3' }}>{p.score} pts{p.eliminated && p.id !== room.winnerId ? ' — éliminé' : ''}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </Shell>
-  );
+  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 420,
+      margin: '40px auto',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#8b96a3',
+      letterSpacing: 2
+    }
+  }, "FIN DE LA PARTIE"), /*#__PURE__*/React.createElement("h1", {
+    className: "bo-title",
+    style: {
+      fontSize: 32,
+      color: '#d99a3c',
+      margin: '6px 0 24px'
+    }
+  }, winner?.name, " remporte la table !"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8
+    }
+  }, ranked.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: p.id,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      background: '#16212c',
+      border: '1px solid #223543',
+      borderRadius: 10,
+      padding: '10px 14px'
+    }
+  }, /*#__PURE__*/React.createElement("span", null, i + 1, ". ", p.name, p.id === myId ? ' (toi)' : ''), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: '#8b96a3'
+    }
+  }, p.score, " pts", p.eliminated && p.id !== room.winnerId ? ' — éliminé' : ''))))));
 }
 
 // ---------------------------------------------------------------------------
@@ -555,25 +1117,26 @@ function App() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState([]);
-
   useEffect(() => {
     // Pick up ?table=CODE from the URL so shared links auto-fill the code.
     const params = new URLSearchParams(window.location.search);
     const t = params.get('table');
     if (t) setCodeInput(t.toUpperCase());
   }, []);
-
   useEffect(() => {
     if (!roomCode) return;
-    const unsub = subscribeRoom(roomCode, (fresh) => setRoom(fresh));
+    const unsub = subscribeRoom(roomCode, fresh => setRoom(fresh));
     return unsub;
   }, [roomCode]);
-
-  useEffect(() => { setSelected([]); }, [room?.currentPlayerId, room?.turnPhase, room?.phase]);
-
+  useEffect(() => {
+    setSelected([]);
+  }, [room?.currentPlayerId, room?.turnPhase, room?.phase]);
   async function handleCreate() {
     setError('');
-    if (!nameInput.trim()) { setError('Entre ton prénom.'); return; }
+    if (!nameInput.trim()) {
+      setError('Entre ton prénom.');
+      return;
+    }
     setBusy(true);
     let code = genCode();
     for (let i = 0; i < 5; i++) {
@@ -581,69 +1144,159 @@ function App() {
       if (!exists) break;
       code = genCode();
     }
-    const state = { code, phase: 'lobby', players: [], hostId: null, deck: [], discard: [], log: [], roundNumber: 0, dealerIndex: 0 };
-    const { state: s2, myId: id, error: err } = mutJoin(state, nameInput, null);
-    if (err) { setError(err); setBusy(false); return; }
+    const state = {
+      code,
+      phase: 'lobby',
+      players: [],
+      hostId: null,
+      deck: [],
+      discard: [],
+      log: [],
+      roundNumber: 0,
+      dealerIndex: 0
+    };
+    const {
+      state: s2,
+      myId: id,
+      error: err
+    } = mutJoin(state, nameInput, null);
+    if (err) {
+      setError(err);
+      setBusy(false);
+      return;
+    }
     const res = await saveRoom(code, s2);
-    if (!res.ok) { setError('Impossible de créer la table : ' + res.err); setBusy(false); return; }
-    setMyId(id); setRoomCode(code); setRoom(s2); setBusy(false);
+    if (!res.ok) {
+      setError('Impossible de créer la table : ' + res.err);
+      setBusy(false);
+      return;
+    }
+    setMyId(id);
+    setRoomCode(code);
+    setRoom(s2);
+    setBusy(false);
     window.history.replaceState(null, '', '?table=' + code);
   }
   async function handleJoin() {
     setError('');
-    if (!nameInput.trim()) { setError('Entre ton prénom.'); return; }
-    if (!codeInput.trim()) { setError('Entre le code de la table.'); return; }
+    if (!nameInput.trim()) {
+      setError('Entre ton prénom.');
+      return;
+    }
+    if (!codeInput.trim()) {
+      setError('Entre le code de la table.');
+      return;
+    }
     setBusy(true);
     const code = codeInput.trim().toUpperCase();
     const existing = await loadRoom(code);
-    if (!existing) { setError('Aucune table trouvée avec ce code.'); setBusy(false); return; }
-    const { state: s2, myId: id, error: err } = mutJoin(existing, nameInput, null);
-    if (err) { setError(err); setBusy(false); return; }
+    if (!existing) {
+      setError('Aucune table trouvée avec ce code.');
+      setBusy(false);
+      return;
+    }
+    const {
+      state: s2,
+      myId: id,
+      error: err
+    } = mutJoin(existing, nameInput, null);
+    if (err) {
+      setError(err);
+      setBusy(false);
+      return;
+    }
     const res = await saveRoom(code, s2);
-    if (!res.ok) { setError('Impossible de rejoindre la table : ' + res.err); setBusy(false); return; }
-    setMyId(id); setRoomCode(code); setRoom(s2); setBusy(false);
+    if (!res.ok) {
+      setError('Impossible de rejoindre la table : ' + res.err);
+      setBusy(false);
+      return;
+    }
+    setMyId(id);
+    setRoomCode(code);
+    setRoom(s2);
+    setBusy(false);
     window.history.replaceState(null, '', '?table=' + code);
   }
   async function act(mutator) {
-    setError(''); setBusy(true);
+    setError('');
+    setBusy(true);
     const fresh = await loadRoom(roomCode);
-    if (!fresh) { setError('Connexion à la table perdue.'); setBusy(false); return; }
+    if (!fresh) {
+      setError('Connexion à la table perdue.');
+      setBusy(false);
+      return;
+    }
     const result = mutator(fresh);
-    if (result.error) { setError(result.error); setBusy(false); return; }
+    if (result.error) {
+      setError(result.error);
+      setBusy(false);
+      return;
+    }
     const res = await saveRoom(roomCode, result.state);
-    if (!res.ok) { setError('Erreur de synchronisation : ' + res.err); setBusy(false); return; }
+    if (!res.ok) {
+      setError('Erreur de synchronisation : ' + res.err);
+      setBusy(false);
+      return;
+    }
     setBusy(false);
   }
-
-  const me = room?.players.find((p) => p.id === myId);
+  const me = room?.players.find(p => p.id === myId);
   const isHost = room?.hostId === myId;
   const isMyTurn = room?.currentPlayerId === myId;
-
   function toggleCard(c) {
     if (!isMyTurn || room.turnPhase !== 'discard') return;
-    setSelected((sel) => (sel.includes(c) ? sel.filter((x) => x !== c) : [...sel, c]));
+    setSelected(sel => sel.includes(c) ? sel.filter(x => x !== c) : [...sel, c]);
   }
-
-  if (!roomCode) return <Landing {...{ nameInput, setNameInput, codeInput, setCodeInput, handleCreate, handleJoin, error, busy }} />;
-  if (!room) return <CenteredMessage text="Connexion à la table…" />;
-  if (room.phase === 'lobby') return <Lobby room={room} myId={myId} isHost={isHost} onStart={() => act((s) => mutStartGame(s, myId))} busy={busy} error={error} />;
+  if (!roomCode) return /*#__PURE__*/React.createElement(Landing, {
+    nameInput,
+    setNameInput,
+    codeInput,
+    setCodeInput,
+    handleCreate,
+    handleJoin,
+    error,
+    busy
+  });
+  if (!room) return /*#__PURE__*/React.createElement(CenteredMessage, {
+    text: "Connexion à la table…"
+  });
+  if (room.phase === 'lobby') return /*#__PURE__*/React.createElement(Lobby, {
+    room: room,
+    myId: myId,
+    isHost: isHost,
+    onStart: () => act(s => mutStartGame(s, myId)),
+    busy: busy,
+    error: error
+  });
   if (room.phase === 'playing') {
-    return (
-      <GameTable
-        room={room} me={me} myId={myId} isMyTurn={isMyTurn} selected={selected} toggleCard={toggleCard}
-        onDraw={(src) => act((s) => mutDraw(s, myId, src))}
-        onDiscard={() => act((s) => mutDiscard(s, myId, selected))}
-        onCall={() => act((s) => mutCallBolivienne(s, myId))}
-        busy={busy} error={error}
-      />
-    );
+    return /*#__PURE__*/React.createElement(GameTable, {
+      room: room,
+      me: me,
+      myId: myId,
+      isMyTurn: isMyTurn,
+      selected: selected,
+      toggleCard: toggleCard,
+      onDraw: src => act(s => mutDraw(s, myId, src)),
+      onDiscard: () => act(s => mutDiscard(s, myId, selected)),
+      onCall: () => act(s => mutCallBolivienne(s, myId)),
+      busy: busy,
+      error: error
+    });
   }
-  if (room.phase === 'roundEnd') return <RoundEnd room={room} isHost={isHost} onNext={() => act((s) => mutNextRound(s, myId))} busy={busy} error={error} />;
-  if (room.phase === 'gameOver') return <GameOver room={room} myId={myId} />;
+  if (room.phase === 'roundEnd') return /*#__PURE__*/React.createElement(RoundEnd, {
+    room: room,
+    isHost: isHost,
+    onNext: () => act(s => mutNextRound(s, myId)),
+    busy: busy,
+    error: error
+  });
+  if (room.phase === 'gameOver') return /*#__PURE__*/React.createElement(GameOver, {
+    room: room,
+    myId: myId
+  });
   return null;
 }
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
 </script>
 </body>
 </html>
