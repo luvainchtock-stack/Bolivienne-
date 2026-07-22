@@ -36,10 +36,26 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+
+// Firebase Realtime Database silently drops empty arrays/objects (they come
+// back as `undefined`, not `[]`). Normalize on every read so downstream code
+// can always assume arrays exist.
+function normalizeRoom(raw) {
+  if (!raw) return raw;
+  const state = raw;
+  state.deck = state.deck || [];
+  state.discard = state.discard || [];
+  state.log = state.log || [];
+  state.players = (state.players || []).map(p => ({
+    ...p,
+    hand: p.hand || []
+  }));
+  return state;
+}
 async function loadRoom(code) {
   try {
     const snap = await db.ref('rooms/' + code).once('value');
-    return snap.exists() ? snap.val() : null;
+    return snap.exists() ? normalizeRoom(snap.val()) : null;
   } catch (e) {
     return null;
   }
@@ -60,7 +76,7 @@ async function saveRoom(code, state) {
 function subscribeRoom(code, cb) {
   const ref = db.ref('rooms/' + code);
   const handler = snap => {
-    if (snap.exists()) cb(snap.val());
+    if (snap.exists()) cb(normalizeRoom(snap.val()));
   };
   ref.on('value', handler);
   return () => ref.off('value', handler);
@@ -1296,7 +1312,42 @@ function App() {
   });
   return null;
 }
-ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      err: null
+    };
+  }
+  static getDerivedStateFromError(err) {
+    return {
+      err
+    };
+  }
+  render() {
+    if (this.state.err) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          minHeight: '100vh',
+          background: '#0e151c',
+          color: '#e18a6e',
+          fontFamily: 'monospace',
+          padding: 20,
+          boxSizing: 'border-box',
+          whiteSpace: 'pre-wrap'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          color: '#ece6d6',
+          fontWeight: 'bold',
+          marginBottom: 10
+        }
+      }, "Erreur dans le jeu :"), String(this.state.err && (this.state.err.stack || this.state.err.message || this.state.err)));
+    }
+    return this.props.children;
+  }
+}
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(App, null)));
 </script>
 </body>
 </html>
