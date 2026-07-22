@@ -413,13 +413,14 @@ function mutNextRound(state, byId) {
   dealHands(state, active.map(p => p.id), deck);
   state.discard = [deck.pop()];
   state.deck = deck;
-  state.dealerIndex = (state.dealerIndex + 1) % active.length;
-  state.currentPlayerId = active[state.dealerIndex].id;
+  const maxScore = Math.max(...active.map(p => p.score));
+  const leader = active.find(p => p.score === maxScore);
+  state.currentPlayerId = leader.id;
   state.turnPhase = 'discard';
   state.turnStartPickup = state.discard[state.discard.length - 1];
   state.phase = 'playing';
   state.roundNumber += 1;
-  state.log = [...state.log, `Manche ${state.roundNumber} !`].slice(-30);
+  state.log = [...state.log, `Manche ${state.roundNumber} ! ${leader.name} commence (le plus de points).`].slice(-30);
   return {
     state
   };
