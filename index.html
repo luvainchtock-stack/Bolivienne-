@@ -245,6 +245,7 @@ function mutStartGame(state, byId) {
   state.dealerIndex = 0;
   state.currentPlayerId = ids[0];
   state.turnPhase = 'discard';
+  state.turnStartPickup = state.discard[state.discard.length - 1];
   state.phase = 'playing';
   state.roundNumber = 1;
   state.log = [...(state.log || []), `Table lancée avec ${state.players.length} joueurs.`].slice(-30);
@@ -265,10 +266,11 @@ function mutDraw(state, byId, source) {
   const player = state.players.find(p => p.id === byId);
   let card;
   if (source === 'discard') {
-    if (state.discard.length === 0) return {
-      error: 'La défausse est vide.'
+    if (!state.turnStartPickup) return {
+      error: 'Pas de carte disponible dans la défausse.'
     };
-    card = state.discard.pop();
+    card = state.turnStartPickup;
+    state.discard = state.discard.filter(c => c !== card);
   } else {
     if (state.deck.length === 0) {
       if (state.discard.length <= 1) return {
@@ -284,6 +286,7 @@ function mutDraw(state, byId, source) {
   state.log = [...state.log, `${player.name} a pioché ${source === 'discard' ? 'la défausse' : 'le talon'}.`].slice(-30);
   state.currentPlayerId = nextActiveId(state, byId);
   state.turnPhase = 'discard';
+  state.turnStartPickup = state.discard.length ? state.discard[state.discard.length - 1] : null;
   return {
     state
   };
@@ -413,6 +416,7 @@ function mutNextRound(state, byId) {
   state.dealerIndex = (state.dealerIndex + 1) % active.length;
   state.currentPlayerId = active[state.dealerIndex].id;
   state.turnPhase = 'discard';
+  state.turnStartPickup = state.discard[state.discard.length - 1];
   state.phase = 'playing';
   state.roundNumber += 1;
   state.log = [...state.log, `Manche ${state.roundNumber} !`].slice(-30);
@@ -778,7 +782,7 @@ function GameTable({
 }) {
   const active = room.players.filter(p => !p.eliminated);
   const others = active.filter(p => p.id !== myId);
-  const topDiscard = room.discard[room.discard.length - 1];
+  const topDiscard = room.turnStartPickup;
   const myValue = me ? handValue(me.hand) : 0;
   const canCall = isMyTurn && room.turnPhase === 'discard' && myValue <= CALL_THRESHOLD;
   const selValue = selected.reduce((s, c) => s + valueOf(c), 0);
