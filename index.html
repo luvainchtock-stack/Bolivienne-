@@ -156,11 +156,13 @@ function isValidRun(cards) {
   if (new Set(nonJ.map(suitOf)).size !== 1) return false;
   const ranks = nonJ.map(rankOf);
   if (new Set(ranks).size !== ranks.length) return false;
-  const min = Math.min(...ranks),
-    max = Math.max(...ranks);
-  const span = max - min + 1;
-  if (span !== cards.length) return false;
-  return span - nonJ.length <= jokers.length;
+  const n = cards.length;
+  const minR = Math.min(...ranks),
+    maxR = Math.max(...ranks);
+  if (maxR - minR + 1 > n) return false;
+  const sLow = Math.max(1, maxR - n + 1);
+  const sHigh = Math.min(minR, 13 - n + 1);
+  return sLow <= sHigh;
 }
 function isValidDiscard(cards) {
   if (cards.length === 0) return false;
@@ -170,16 +172,20 @@ function isValidDiscard(cards) {
 function orderRunAscending(cards) {
   const jokers = cards.filter(isJoker);
   const nonJ = cards.filter(c => !isJoker(c));
+  const n = cards.length;
   const ranks = nonJ.map(rankOf);
-  const min = Math.min(...ranks),
-    max = Math.max(...ranks);
+  const minR = Math.min(...ranks),
+    maxR = Math.max(...ranks);
+  const sLow = Math.max(1, maxR - n + 1);
+  const sHigh = Math.min(minR, 13 - n + 1);
+  const s = sLow <= sHigh ? sLow : minR;
   const byRank = {};
   nonJ.forEach(c => {
     byRank[rankOf(c)] = c;
   });
   const seq = [];
   let jIdx = 0;
-  for (let r = min; r <= max; r++) seq.push(byRank[r] || jokers[jIdx++]);
+  for (let r = s; r <= s + n - 1; r++) seq.push(byRank[r] !== undefined ? byRank[r] : jokers[jIdx++]);
   return seq;
 }
 function uid() {
@@ -312,7 +318,6 @@ function mutDiscard(state, byId, cardIds) {
   const toPush = cardIds.length > 1 && isValidRun(cardIds) ? orderRunAscending(cardIds) : cardIds;
   state.discard.push(...toPush);
   state.log = [...state.log, `${player.name} a posé ${cardIds.length} carte${cardIds.length > 1 ? 's' : ''}.`].slice(-30);
-  if (player.hand.length === 0) return mutEndRound(state, byId, true);
   state.turnPhase = 'draw';
   return {
     state
