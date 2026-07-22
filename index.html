@@ -773,6 +773,56 @@ function Lobby({
     }
   }, "En attente que l'hôte lance la partie…")));
 }
+function seatPositions(n) {
+  if (n === 0) return [];
+  if (n === 1) return [{
+    left: 50,
+    top: 12
+  }];
+  const positions = [];
+  const angleStart = 165,
+    angleEnd = 15;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const angleDeg = angleStart + (angleEnd - angleStart) * t;
+    const rad = angleDeg * Math.PI / 180;
+    const x = 50 + 44 * Math.cos(rad);
+    const y = 34 - 26 * Math.sin(rad);
+    positions.push({
+      left: x,
+      top: y
+    });
+  }
+  return positions;
+}
+function FannedBacks({
+  count
+}) {
+  const shown = Math.min(count, 7);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      height: 34,
+      width: 34 + (shown - 1) * 8,
+      margin: '0 auto'
+    }
+  }, Array.from({
+    length: shown
+  }).map((_, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      position: 'absolute',
+      left: i * 8,
+      top: 0,
+      width: 24,
+      height: 34,
+      borderRadius: 4,
+      background: 'repeating-linear-gradient(135deg,#1b2a35,#1b2a35 4px,#223543 4px,#223543 8px)',
+      border: '1px solid #2c4351',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.4)'
+    }
+  })));
+}
 function GameTable({
   room,
   me,
@@ -788,6 +838,7 @@ function GameTable({
 }) {
   const active = room.players.filter(p => !p.eliminated);
   const others = active.filter(p => p.id !== myId);
+  const seats = seatPositions(others.length);
   const topDiscard = room.turnStartPickup;
   const myValue = me ? handValue(me.hand) : 0;
   const canCall = isMyTurn && room.turnPhase === 'discard' && myValue <= CALL_THRESHOLD;
@@ -795,7 +846,7 @@ function GameTable({
   const validSelection = selected.length > 0 && isValidDiscard(selected);
   return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
     style: {
-      maxWidth: 520,
+      maxWidth: 900,
       margin: '0 auto'
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -803,13 +854,13 @@ function GameTable({
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 10
+      marginBottom: 8
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "bo-title",
     style: {
       color: '#d99a3c',
-      fontSize: 20
+      fontSize: 18
     }
   }, "Manche ", room.roundNumber), /*#__PURE__*/React.createElement("span", {
     style: {
@@ -818,56 +869,79 @@ function GameTable({
     }
   }, "Table ", room.code)), /*#__PURE__*/React.createElement("div", {
     style: {
+      position: 'relative',
+      width: '100%',
+      paddingTop: '52%',
+      background: 'radial-gradient(ellipse at 50% 45%, #1c3a2d 0%, #14261e 75%, #0f1c16 100%)',
+      border: '6px solid #2b1d12',
+      borderRadius: '46%',
+      boxShadow: 'inset 0 0 40px rgba(0,0,0,0.5)',
+      marginBottom: 14
+    }
+  }, seats.map((pos, i) => {
+    const p = others[i];
+    const isTurn = room.currentPlayerId === p.id;
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id,
+      style: {
+        position: 'absolute',
+        left: pos.left + '%',
+        top: pos.top + '%',
+        transform: 'translate(-50%, -50%)',
+        textAlign: 'center',
+        width: 92
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        background: '#16212c',
+        border: isTurn ? '2px solid #d99a3c' : '1px solid #223543',
+        borderRadius: 999,
+        padding: '3px 10px 3px 4px',
+        marginBottom: 4,
+        boxShadow: isTurn ? '0 0 10px rgba(217,154,60,0.4)' : 'none'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 18,
+        height: 18,
+        borderRadius: '50%',
+        background: avatarColor(p.name),
+        fontSize: 10,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 700,
+        flexShrink: 0
+      }
+    }, p.name[0]?.toUpperCase()), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11.5,
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }
+    }, p.name)), /*#__PURE__*/React.createElement(FannedBacks, {
+      count: p.hand.length
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10.5,
+        color: '#8b96a3',
+        marginTop: 2
+      }
+    }, p.hand.length, " cartes · ", p.score, " pts"));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      left: '50%',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
       display: 'flex',
-      flexWrap: 'wrap',
-      gap: 8,
-      marginBottom: 16
-    }
-  }, others.map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.id,
-    style: {
-      flex: '1 1 100px',
-      background: '#16212c',
-      border: room.currentPlayerId === p.id ? '2px solid #d99a3c' : '1px solid #223543',
-      borderRadius: 10,
-      padding: '8px 10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      marginBottom: 4
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 22,
-      height: 22,
-      borderRadius: '50%',
-      background: avatarColor(p.name),
-      fontSize: 11,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontWeight: 700
-    }
-  }, p.name[0]?.toUpperCase()), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      fontWeight: 600
-    }
-  }, p.name)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11.5,
-      color: '#8b96a3'
-    }
-  }, p.hand.length, " cartes · ", p.score, " pts")))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'center',
-      gap: 22,
-      alignItems: 'center',
-      margin: '8px 0 20px'
+      gap: 20,
+      alignItems: 'center'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -879,9 +953,9 @@ function GameTable({
     size: "lg"
   }), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11,
-      color: '#8b96a3',
-      marginTop: 6
+      fontSize: 10.5,
+      color: '#c9d4de',
+      marginTop: 5
     }
   }, "Talon (", room.deck.length, ")")), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -893,14 +967,14 @@ function GameTable({
     onClick: isMyTurn && room.turnPhase === 'draw' ? () => onDraw('discard') : undefined
   }), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11,
-      color: '#8b96a3',
-      marginTop: 6
+      fontSize: 10.5,
+      color: '#c9d4de',
+      marginTop: 5
     }
-  }, "Défausse"))), /*#__PURE__*/React.createElement("div", {
+  }, "Défausse")))), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
-      marginBottom: 14,
+      marginBottom: 12,
       minHeight: 20
     }
   }, error && /*#__PURE__*/React.createElement("div", {
@@ -928,7 +1002,7 @@ function GameTable({
       display: 'flex',
       gap: 10,
       justifyContent: 'center',
-      marginBottom: 16
+      marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "bo-btn bo-btn-primary",
@@ -938,7 +1012,7 @@ function GameTable({
     style: {
       display: 'flex',
       justifyContent: 'center',
-      marginBottom: 16
+      marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "bo-btn bo-btn-danger",
@@ -947,7 +1021,7 @@ function GameTable({
   }, "Annoncer ", CALL_NAME, " !")), /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: '1px solid #223543',
-      paddingTop: 14,
+      paddingTop: 12,
       marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -975,7 +1049,7 @@ function GameTable({
     onClick: () => toggleCard(c)
   })))), /*#__PURE__*/React.createElement("details", {
     style: {
-      marginTop: 10
+      marginTop: 8
     }
   }, /*#__PURE__*/React.createElement("summary", {
     style: {
@@ -987,7 +1061,7 @@ function GameTable({
     style: {
       fontSize: 12,
       color: '#8b96a3',
-      maxHeight: 120,
+      maxHeight: 110,
       overflowY: 'auto',
       marginTop: 6
     }
