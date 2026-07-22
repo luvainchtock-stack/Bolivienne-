@@ -98,16 +98,22 @@ const CALL_NAME = 'BOLIVIENNE';
 const CALL_THRESHOLD = 9;
 function createDeck() {
   const deck = [];
-  for (const r of RANKS) for (const s of SUITS) deck.push(r + s);
-  deck.push('JK1', 'JK2');
+  for (let copy = 0; copy < 2; copy++) {
+    for (const r of RANKS) for (const s of SUITS) deck.push(r + s + '#' + copy);
+    deck.push('JK' + (copy * 2 + 1), 'JK' + (copy * 2 + 2));
+  }
   return deck;
+}
+function baseCode(c) {
+  return isJoker(c) ? c : c.split('#')[0];
 }
 function isJoker(c) {
   return c.startsWith('JK');
 }
 function rankOf(c) {
   if (isJoker(c)) return null;
-  const r = c.slice(0, -1);
+  const base = baseCode(c);
+  const r = base.slice(0, -1);
   if (r === 'A') return 1;
   if (r === 'J') return 11;
   if (r === 'Q') return 12;
@@ -115,7 +121,7 @@ function rankOf(c) {
   return parseInt(r, 10);
 }
 function suitOf(c) {
-  return isJoker(c) ? null : c.slice(-1);
+  return isJoker(c) ? null : baseCode(c).slice(-1);
 }
 function valueOf(c) {
   if (isJoker(c)) return -1;
@@ -123,7 +129,7 @@ function valueOf(c) {
 }
 function rankLabel(c) {
   if (isJoker(c)) return '★';
-  return c.slice(0, -1);
+  return baseCode(c).slice(0, -1);
 }
 function handValue(hand) {
   return hand.reduce((s, c) => s + valueOf(c), 0);
@@ -238,7 +244,7 @@ function mutStartGame(state, byId) {
   state.deck = deck;
   state.dealerIndex = 0;
   state.currentPlayerId = ids[0];
-  state.turnPhase = 'draw';
+  state.turnPhase = 'discard';
   state.phase = 'playing';
   state.roundNumber = 1;
   state.log = [...(state.log || []), `Table lancée avec ${state.players.length} joueurs.`].slice(-30);
@@ -254,7 +260,7 @@ function mutDraw(state, byId, source) {
     error: "Ce n'est pas ton tour."
   };
   if (state.turnPhase !== 'draw') return {
-    error: 'Tu as déjà pioché ce tour.'
+    error: "Tu dois d'abord te défausser."
   };
   const player = state.players.find(p => p.id === byId);
   let card;
@@ -275,8 +281,9 @@ function mutDraw(state, byId, source) {
     card = state.deck.pop();
   }
   player.hand.push(card);
-  state.turnPhase = 'discard';
   state.log = [...state.log, `${player.name} a pioché ${source === 'discard' ? 'la défausse' : 'le talon'}.`].slice(-30);
+  state.currentPlayerId = nextActiveId(state, byId);
+  state.turnPhase = 'discard';
   return {
     state
   };
@@ -289,7 +296,7 @@ function mutDiscard(state, byId, cardIds) {
     error: "Ce n'est pas ton tour."
   };
   if (state.turnPhase !== 'discard') return {
-    error: "Pioche d'abord."
+    error: "Tu as déjà joué, pioche pour terminer ton tour."
   };
   const player = state.players.find(p => p.id === byId);
   for (const c of cardIds) if (!player.hand.includes(c)) return {
@@ -303,7 +310,6 @@ function mutDiscard(state, byId, cardIds) {
   state.discard.push(...toPush);
   state.log = [...state.log, `${player.name} a posé ${cardIds.length} carte${cardIds.length > 1 ? 's' : ''}.`].slice(-30);
   if (player.hand.length === 0) return mutEndRound(state, byId, true);
-  state.currentPlayerId = nextActiveId(state, byId);
   state.turnPhase = 'draw';
   return {
     state
@@ -316,8 +322,8 @@ function mutCallBolivienne(state, byId) {
   if (state.currentPlayerId !== byId) return {
     error: "Ce n'est pas ton tour."
   };
-  if (state.turnPhase !== 'draw') return {
-    error: `Tu ne peux annoncer ${CALL_NAME} qu'en début de tour, avant de piocher.`
+  if (state.turnPhase !== 'discard') return {
+    error: `Tu ne peux annoncer ${CALL_NAME} qu'en début de tour, avant de jouer.`
   };
   const player = state.players.find(p => p.id === byId);
   if (handValue(player.hand) > CALL_THRESHOLD) return {
@@ -406,9 +412,9 @@ function mutNextRound(state, byId) {
   state.deck = deck;
   state.dealerIndex = (state.dealerIndex + 1) % active.length;
   state.currentPlayerId = active[state.dealerIndex].id;
-  state.turnPhase = 'draw';
-  state.roundNumber += 1;
+  state.turnPhase = 'discard';
   state.phase = 'playing';
+  state.roundNumber += 1;
   state.log = [...state.log, `Manche ${state.roundNumber} !`].slice(-30);
   return {
     state
@@ -774,7 +780,7 @@ function GameTable({
   const others = active.filter(p => p.id !== myId);
   const topDiscard = room.discard[room.discard.length - 1];
   const myValue = me ? handValue(me.hand) : 0;
-  const canCall = isMyTurn && room.turnPhase === 'draw' && myValue <= CALL_THRESHOLD;
+  const canCall = isMyTurn && room.turnPhase === 'discard' && myValue <= CALL_THRESHOLD;
   const selValue = selected.reduce((s, c) => s + valueOf(c), 0);
   const validSelection = selected.length > 0 && isValidDiscard(selected);
   return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
@@ -892,17 +898,17 @@ function GameTable({
       color: '#e18a6e',
       fontSize: 13.5
     }
-  }, error), !error && isMyTurn && room.turnPhase === 'draw' && /*#__PURE__*/React.createElement("div", {
+  }, error), !error && isMyTurn && room.turnPhase === 'discard' && /*#__PURE__*/React.createElement("div", {
     style: {
       color: '#d99a3c',
       fontSize: 13.5
     }
-  }, "À toi — pioche une carte, ou annonce ", CALL_NAME, "."), !error && isMyTurn && room.turnPhase === 'discard' && /*#__PURE__*/React.createElement("div", {
+  }, "À toi — sélectionne des cartes à poser, ou annonce ", CALL_NAME, "."), !error && isMyTurn && room.turnPhase === 'draw' && /*#__PURE__*/React.createElement("div", {
     style: {
       color: '#d99a3c',
       fontSize: 13.5
     }
-  }, "Sélectionne des cartes à poser."), !error && !isMyTurn && /*#__PURE__*/React.createElement("div", {
+  }, "Pioche une carte pour terminer ton tour."), !error && !isMyTurn && /*#__PURE__*/React.createElement("div", {
     style: {
       color: '#8b96a3',
       fontSize: 13.5
@@ -950,7 +956,7 @@ function GameTable({
       fontSize: 13,
       color: '#8b96a3'
     }
-  }, myValue, " pts")), /*#__PURE__*/React.createElement("div", {
+  }, "Score : ", me?.score ?? 0, " pts")), /*#__PURE__*/React.createElement("div", {
     className: "bo-card-row"
   }, me?.hand.map(c => /*#__PURE__*/React.createElement(Card, {
     key: c,
