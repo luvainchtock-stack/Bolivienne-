@@ -485,6 +485,7 @@ function Shell({
         .bo-input { font-family: inherit; background: #0e151c; border: 1px solid #2c4351; color: #ece6d6; border-radius: 8px; padding: 10px 12px; font-size: 15px; width: 100%; box-sizing: border-box; }
         .bo-chip { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 6px 16px; font-weight: 700; letter-spacing: 3px; background: #d99a3c; color: #1a1208; font-family: Georgia, serif; }
         .bo-card-row { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 14px; }
+        @keyframes boPop { 0%{ transform:scale(0.6); opacity:0; } 15%{ transform:scale(1.08); opacity:1; } 25%{ transform:scale(1); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(0.95); } }
       `), children);
 }
 function CenteredMessage({
@@ -821,6 +822,87 @@ function ScoreBadge({
     }
   }, score);
 }
+function detectAnimationEvents(prevRoom, newRoom) {
+  const events = [];
+  if (!prevRoom || !newRoom || !newRoom.log || !newRoom.players) return events;
+  const prevLen = (prevRoom.log || []).length;
+  const newEntries = newRoom.log.slice(prevLen);
+  for (const msg of newEntries) {
+    if (msg.includes(' a pioché ')) {
+      const actorName = msg.split(' a pioché ')[0];
+      const actor = newRoom.players.find(p => p.name === actorName);
+      if (!actor) continue;
+      const source = msg.includes('défausse') ? 'discard' : 'deck';
+      events.push({
+        type: 'draw',
+        actorId: actor.id,
+        source
+      });
+    } else if (msg.includes(' a posé ')) {
+      const actorName = msg.split(' a posé ')[0];
+      const actor = newRoom.players.find(p => p.name === actorName);
+      if (!actor) continue;
+      const addedCards = (newRoom.discard || []).slice((prevRoom.discard || []).length);
+      events.push({
+        type: 'discard',
+        actorId: actor.id,
+        code: addedCards[addedCards.length - 1] || null
+      });
+    } else if (msg.includes(' annonce ' + CALL_NAME)) {
+      const actorName = msg.split(' annonce ')[0];
+      events.push({
+        type: 'announce',
+        actorName
+      });
+    }
+  }
+  return events;
+}
+function rectToBox(r) {
+  return {
+    left: r.left,
+    top: r.top,
+    width: r.width,
+    height: r.height
+  };
+}
+function FlyingCard({
+  from,
+  to,
+  code,
+  faceDown,
+  onDone
+}) {
+  const [moved, setMoved] = useState(false);
+  useEffect(() => {
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => setMoved(true));
+    });
+    const t = setTimeout(onDone, 480);
+    return () => {
+      clearTimeout(t);
+    };
+  }, []);
+  const dx = to.left - from.left;
+  const dy = to.top - from.top;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      left: from.left,
+      top: from.top,
+      width: from.width,
+      height: from.height,
+      transform: moved ? `translate(${dx}px, ${dy}px) scale(0.85)` : 'translate(0px, 0px) scale(1)',
+      transition: 'transform 420ms cubic-bezier(.22,.68,.32,1)',
+      zIndex: 9999,
+      pointerEvents: 'none'
+    }
+  }, /*#__PURE__*/React.createElement(Card, {
+    code: code || 'JK1',
+    faceDown: faceDown,
+    size: "md"
+  }));
+}
 function GameTable({
   room,
   me,
@@ -839,6 +921,49 @@ function GameTable({
   const topDiscard = room.turnStartPickup;
   const myValue = me ? handValue(me.hand) : 0;
   const canCall = isMyTurn && room.turnPhase === 'discard' && myValue <= CALL_THRESHOLD;
+  const deckRef = useRef(null);
+  const discardRef = useRef(null);
+  const myHandRef = useRef(null);
+  const oppRefsMap = useRef({});
+  const prevRoomRef = useRef(null);
+  const [flyers, setFlyers] = useState([]);
+  const [announcement, setAnnouncement] = useState(null);
+  function addFlyer(fromEl, toEl, code, faceDown) {
+    if (!fromEl || !toEl) return;
+    try {
+      const fromRect = fromEl.getBoundingClientRect();
+      const toRect = toEl.getBoundingClientRect();
+      const id = 'f' + Date.now() + Math.random();
+      setFlyers(fl => [...fl, {
+        id,
+        code,
+        faceDown,
+        from: rectToBox(fromRect),
+        to: rectToBox(toRect)
+      }]);
+      setTimeout(() => setFlyers(fl => fl.filter(f => f.id !== id)), 520);
+    } catch (e) {/* never let animation issues break gameplay */}
+  }
+  useEffect(() => {
+    try {
+      const events = detectAnimationEvents(prevRoomRef.current, room);
+      events.forEach(ev => {
+        if (ev.type === 'draw') {
+          const fromEl = ev.source === 'discard' ? discardRef.current : deckRef.current;
+          const toEl = ev.actorId === myId ? myHandRef.current : oppRefsMap.current[ev.actorId];
+          addFlyer(fromEl, toEl, null, true);
+        } else if (ev.type === 'discard') {
+          const fromEl = ev.actorId === myId ? myHandRef.current : oppRefsMap.current[ev.actorId];
+          const toEl = discardRef.current;
+          addFlyer(fromEl, toEl, ev.code, false);
+        } else if (ev.type === 'announce') {
+          setAnnouncement(ev.actorName);
+          setTimeout(() => setAnnouncement(null), 1800);
+        }
+      });
+    } catch (e) {/* animation layer must never crash the game */}
+    prevRoomRef.current = room;
+  }, [room]);
   const selValue = selected.reduce((s, c) => s + valueOf(c), 0);
   const validSelection = selected.length > 0 && isValidDiscard(selected);
   const hand = me?.hand || [];
@@ -878,6 +1003,9 @@ function GameTable({
     const isTurn = room.currentPlayerId === p.id;
     return /*#__PURE__*/React.createElement("div", {
       key: p.id,
+      ref: el => {
+        oppRefsMap.current[p.id] = el;
+      },
       style: {
         textAlign: 'center',
         width: 88
@@ -916,6 +1044,7 @@ function GameTable({
       margin: '4px 0 18px'
     }
   }, /*#__PURE__*/React.createElement("div", {
+    ref: deckRef,
     style: {
       textAlign: 'center'
     }
@@ -930,6 +1059,7 @@ function GameTable({
       marginTop: 5
     }
   }, "Talon (", room.deck.length, ")")), /*#__PURE__*/React.createElement("div", {
+    ref: discardRef,
     style: {
       textAlign: 'center',
       position: 'relative',
@@ -1047,6 +1177,7 @@ function GameTable({
       color: '#8b96a3'
     }
   }, "Main : ", myValue, " pts")), /*#__PURE__*/React.createElement("div", {
+    ref: myHandRef,
     style: {
       display: 'flex',
       justifyContent: 'center',
@@ -1088,7 +1219,37 @@ function GameTable({
     style: {
       padding: '2px 0'
     }
-  }, l))))));
+  }, l))))), flyers.map(f => /*#__PURE__*/React.createElement(FlyingCard, {
+    key: f.id,
+    from: f.from,
+    to: f.to,
+    code: f.code,
+    faceDown: f.faceDown,
+    onDone: () => setFlyers(fl => fl.filter(x => x.id !== f.id))
+  })), announcement && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      top: '38%',
+      textAlign: 'center',
+      zIndex: 10000,
+      pointerEvents: 'none',
+      padding: '0 16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bo-title",
+    style: {
+      display: 'inline-block',
+      background: '#a5432c',
+      color: '#f6efe0',
+      padding: '14px 24px',
+      borderRadius: 14,
+      fontSize: 22,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+      animation: 'boPop 1800ms ease'
+    }
+  }, announcement, " annonce ", CALL_NAME, " !")));
 }
 function RoundEnd({
   room,
