@@ -259,23 +259,34 @@ function mutStartGame(state, byId) {
     state
   };
 }
-function mutDraw(state, byId, source) {
+function mutPlayTurn(state, byId, cardIds, source) {
   if (state.phase !== 'playing') return {
     error: "La manche n'est pas en cours."
   };
   if (state.currentPlayerId !== byId) return {
     error: "Ce n'est pas ton tour."
   };
-  if (state.turnPhase !== 'draw') return {
-    error: "Tu dois d'abord te défausser."
+  if (state.turnPhase !== 'discard') return {
+    error: 'Tu as déjà joué ce tour.'
   };
   const player = state.players.find(p => p.id === byId);
+  for (const c of cardIds) if (!player.hand.includes(c)) return {
+    error: 'Sélection invalide.'
+  };
+  if (!isValidDiscard(cardIds)) return {
+    error: "Ce n'est ni une carte seule, ni une paire/brelan/carré, ni une suite valide."
+  };
+  const pickupBeforeDiscard = state.turnStartPickup;
+  player.hand = player.hand.filter(c => !cardIds.includes(c));
+  const toPush = cardIds.length > 1 && isValidRun(cardIds) ? orderRunAscending(cardIds) : cardIds;
+  state.discard.push(...toPush);
+  state.log = [...state.log, `${player.name} a posé ${cardIds.length} carte${cardIds.length > 1 ? 's' : ''}.`].slice(-30);
   let card;
   if (source === 'discard') {
-    if (!state.turnStartPickup) return {
+    if (!pickupBeforeDiscard) return {
       error: 'Pas de carte disponible dans la défausse.'
     };
-    card = state.turnStartPickup;
+    card = pickupBeforeDiscard;
     state.discard = state.discard.filter(c => c !== card);
   } else {
     if (state.deck.length === 0) {
@@ -293,32 +304,14 @@ function mutDraw(state, byId, source) {
   state.currentPlayerId = nextActiveId(state, byId);
   state.turnPhase = 'discard';
   state.turnStartPickup = state.discard.length ? state.discard[state.discard.length - 1] : null;
-  return {
-    state
+  state.lastAction = {
+    seq: (state.lastAction ? state.lastAction.seq : 0) + 1,
+    type: 'play',
+    actorId: byId,
+    discarded: toPush,
+    drawSource: source,
+    drawnCard: source === 'discard' ? card : null
   };
-}
-function mutDiscard(state, byId, cardIds) {
-  if (state.phase !== 'playing') return {
-    error: "La manche n'est pas en cours."
-  };
-  if (state.currentPlayerId !== byId) return {
-    error: "Ce n'est pas ton tour."
-  };
-  if (state.turnPhase !== 'discard') return {
-    error: "Tu as déjà joué, pioche pour terminer ton tour."
-  };
-  const player = state.players.find(p => p.id === byId);
-  for (const c of cardIds) if (!player.hand.includes(c)) return {
-    error: 'Sélection invalide.'
-  };
-  if (!isValidDiscard(cardIds)) return {
-    error: "Ce n'est ni une carte seule, ni une paire/brelan/carré, ni une suite valide."
-  };
-  player.hand = player.hand.filter(c => !cardIds.includes(c));
-  const toPush = cardIds.length > 1 && isValidRun(cardIds) ? orderRunAscending(cardIds) : cardIds;
-  state.discard.push(...toPush);
-  state.log = [...state.log, `${player.name} a posé ${cardIds.length} carte${cardIds.length > 1 ? 's' : ''}.`].slice(-30);
-  state.turnPhase = 'draw';
   return {
     state
   };
@@ -336,6 +329,12 @@ function mutCallBolivienne(state, byId) {
   const player = state.players.find(p => p.id === byId);
   if (handValue(player.hand) > CALL_THRESHOLD) return {
     error: `Ta main doit valoir ${CALL_THRESHOLD} points ou moins.`
+  };
+  state.lastAction = {
+    seq: (state.lastAction ? state.lastAction.seq : 0) + 1,
+    type: 'announce',
+    actorId: byId,
+    name: player.name
   };
   return mutEndRound(state, byId, false);
 }
@@ -398,10 +397,22 @@ function mutEndRound(state, callerId, selfEmptied) {
     if (tie) parts.push('égalité (+25)');
     state.log = [...state.log, `${callerName} annonce ${CALL_NAME} raté : ${parts.join(' et ')}.`].slice(-30);
   }
-  if (stillActive.length <= 1) {
-    state.phase = 'gameOver';
-    state.winnerId = stillActive[0]?.id || null;
-  } else state.phase = 'roundEnd';
+  state.phase = 'roundEnd';
+  state.gameWillEnd = stillActive.length <= 1;
+  state.pendingWinnerId = stillActive.length <= 1 ? stillActive[0]?.id || null : null;
+  return {
+    state
+  };
+}
+function mutFinishGame(state, byId) {
+  if (state.phase !== 'roundEnd') return {
+    error: "On n'est pas entre deux manches."
+  };
+  if (state.hostId !== byId) return {
+    error: "Seul l'hôte peut terminer la partie."
+  };
+  state.phase = 'gameOver';
+  state.winnerId = state.pendingWinnerId;
   return {
     state
   };
@@ -409,6 +420,9 @@ function mutEndRound(state, callerId, selfEmptied) {
 function mutNextRound(state, byId) {
   if (state.phase !== 'roundEnd') return {
     error: "On n'est pas entre deux manches."
+  };
+  if (state.gameWillEnd) return {
+    error: 'La partie est terminée.'
   };
   if (state.hostId !== byId) return {
     error: "Seul l'hôte peut lancer la manche suivante."
@@ -463,12 +477,14 @@ function mutJoin(state, name, existingId) {
 // UI atoms
 // ---------------------------------------------------------------------------
 function Shell({
-  children
+  children,
+  felt
 }) {
+  const bg = felt ? 'radial-gradient(ellipse at 50% 15%, #1f4a34 0%, #17392a 55%, #0f2318 100%)' : 'radial-gradient(ellipse at top, #182430 0%, #0e151c 70%)';
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: '100vh',
-      background: 'radial-gradient(ellipse at top, #182430 0%, #0e151c 70%)',
+      background: bg,
       color: '#ece6d6',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       padding: 16,
@@ -486,6 +502,7 @@ function Shell({
         .bo-chip { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 6px 16px; font-weight: 700; letter-spacing: 3px; background: #d99a3c; color: #1a1208; font-family: Georgia, serif; }
         .bo-card-row { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 14px; }
         @keyframes boPop { 0%{ transform:scale(0.6); opacity:0; } 15%{ transform:scale(1.08); opacity:1; } 25%{ transform:scale(1); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(0.95); } }
+        @keyframes boFlipIn { 0%{ transform: scaleX(0.05) rotateY(-90deg); opacity:0; } 60%{ transform: scaleX(1.05) rotateY(0deg); } 100%{ transform: scaleX(1) rotateY(0deg); opacity:1; } }
       `), children);
 }
 function CenteredMessage({
@@ -824,37 +841,27 @@ function ScoreBadge({
 }
 function detectAnimationEvents(prevRoom, newRoom) {
   const events = [];
-  if (!prevRoom || !newRoom || !newRoom.log || !newRoom.players) return events;
-  const prevLen = (prevRoom.log || []).length;
-  const newEntries = newRoom.log.slice(prevLen);
-  for (const msg of newEntries) {
-    if (msg.includes(' a pioché ')) {
-      const actorName = msg.split(' a pioché ')[0];
-      const actor = newRoom.players.find(p => p.name === actorName);
-      if (!actor) continue;
-      const source = msg.includes('défausse') ? 'discard' : 'deck';
-      events.push({
-        type: 'draw',
-        actorId: actor.id,
-        source
-      });
-    } else if (msg.includes(' a posé ')) {
-      const actorName = msg.split(' a posé ')[0];
-      const actor = newRoom.players.find(p => p.name === actorName);
-      if (!actor) continue;
-      const addedCards = (newRoom.discard || []).slice((prevRoom.discard || []).length);
-      events.push({
-        type: 'discard',
-        actorId: actor.id,
-        code: addedCards[addedCards.length - 1] || null
-      });
-    } else if (msg.includes(' annonce ' + CALL_NAME)) {
-      const actorName = msg.split(' annonce ')[0];
-      events.push({
-        type: 'announce',
-        actorName
-      });
-    }
+  if (!prevRoom || !newRoom || !newRoom.lastAction) return events;
+  const prevSeq = prevRoom.lastAction ? prevRoom.lastAction.seq : -1;
+  const la = newRoom.lastAction;
+  if (la.seq === prevSeq) return events;
+  if (la.type === 'play') {
+    events.push({
+      type: 'discard',
+      actorId: la.actorId,
+      codes: la.discarded || []
+    });
+    events.push({
+      type: 'draw',
+      actorId: la.actorId,
+      source: la.drawSource,
+      code: la.drawnCard
+    });
+  } else if (la.type === 'announce') {
+    events.push({
+      type: 'announce',
+      actorName: la.name
+    });
   }
   return events;
 }
@@ -910,8 +917,7 @@ function GameTable({
   isMyTurn,
   selected,
   toggleCard,
-  onDraw,
-  onDiscard,
+  onPlayTurn,
   onCall,
   busy,
   error
@@ -928,18 +934,21 @@ function GameTable({
   const prevRoomRef = useRef(null);
   const [flyers, setFlyers] = useState([]);
   const [announcement, setAnnouncement] = useState(null);
-  function addFlyer(fromEl, toEl, code, faceDown) {
+  function addFlyer(fromEl, toEl, code, faceDown, offsetX, offsetY) {
     if (!fromEl || !toEl) return;
     try {
       const fromRect = fromEl.getBoundingClientRect();
       const toRect = toEl.getBoundingClientRect();
+      const toBox = rectToBox(toRect);
+      toBox.left += offsetX || 0;
+      toBox.top += offsetY || 0;
       const id = 'f' + Date.now() + Math.random();
       setFlyers(fl => [...fl, {
         id,
         code,
         faceDown,
         from: rectToBox(fromRect),
-        to: rectToBox(toRect)
+        to: toBox
       }]);
       setTimeout(() => setFlyers(fl => fl.filter(f => f.id !== id)), 520);
     } catch (e) {/* never let animation issues break gameplay */}
@@ -951,11 +960,14 @@ function GameTable({
         if (ev.type === 'draw') {
           const fromEl = ev.source === 'discard' ? discardRef.current : deckRef.current;
           const toEl = ev.actorId === myId ? myHandRef.current : oppRefsMap.current[ev.actorId];
-          addFlyer(fromEl, toEl, null, true);
+          const revealCode = ev.source === 'discard' ? ev.code : null;
+          addFlyer(fromEl, toEl, revealCode, !revealCode, 0, 0);
         } else if (ev.type === 'discard') {
           const fromEl = ev.actorId === myId ? myHandRef.current : oppRefsMap.current[ev.actorId];
           const toEl = discardRef.current;
-          addFlyer(fromEl, toEl, ev.code, false);
+          (ev.codes || []).forEach((code, i) => {
+            setTimeout(() => addFlyer(fromEl, toEl, code, false, i * 5, i * -3), i * 90);
+          });
         } else if (ev.type === 'announce') {
           setAnnouncement(ev.actorName);
           setTimeout(() => setAnnouncement(null), 1800);
@@ -968,10 +980,17 @@ function GameTable({
   const validSelection = selected.length > 0 && isValidDiscard(selected);
   const hand = me?.hand || [];
   const mid = (hand.length - 1) / 2;
-  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+  const canPlay = isMyTurn && room.turnPhase === 'discard' && validSelection && !busy;
+  const iAmEliminated = !!me?.eliminated;
+  return /*#__PURE__*/React.createElement(Shell, {
+    felt: true
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       maxWidth: 460,
-      margin: '0 auto'
+      margin: '0 auto',
+      minHeight: 'calc(100vh - 32px)',
+      display: 'flex',
+      flexDirection: 'column'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -983,21 +1002,39 @@ function GameTable({
   }, /*#__PURE__*/React.createElement("span", {
     className: "bo-title",
     style: {
-      color: '#d99a3c',
+      color: '#f0c987',
       fontSize: 18
     }
   }, "Manche ", room.roundNumber), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12,
-      color: '#8b96a3'
+      color: '#cfe0d4'
     }
-  }, "Table ", room.code)), /*#__PURE__*/React.createElement("div", {
+  }, "Table ", room.code)), iAmEliminated && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      background: 'rgba(0,0,0,0.25)',
+      border: '1px solid rgba(255,255,255,0.15)',
+      borderRadius: 10,
+      padding: '8px 12px',
+      marginBottom: 10,
+      fontSize: 13,
+      color: '#f0c987'
+    }
+  }, "Tu es éliminé — tu suis la partie en spectateur."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      gap: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexWrap: 'wrap',
       justifyContent: 'center',
-      gap: 18,
-      marginBottom: 18
+      gap: 18
     }
   }, others.map(p => {
     const isTurn = room.currentPlayerId === p.id;
@@ -1026,12 +1063,12 @@ function GameTable({
       style: {
         fontSize: 12.5,
         fontWeight: 700,
-        color: isTurn ? '#d99a3c' : '#ece6d6'
+        color: isTurn ? '#f0c987' : '#ece6d6'
       }
     }, p.name)), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 10.5,
-        color: '#8b96a3',
+        color: '#cfe0d4',
         marginTop: 2
       }
     }, p.hand.length, " cartes", isTurn ? ' · à son tour' : ''));
@@ -1039,9 +1076,8 @@ function GameTable({
     style: {
       display: 'flex',
       justifyContent: 'center',
-      gap: 26,
-      alignItems: 'flex-end',
-      margin: '4px 0 18px'
+      gap: 30,
+      alignItems: 'flex-end'
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: deckRef,
@@ -1050,12 +1086,12 @@ function GameTable({
     }
   }, /*#__PURE__*/React.createElement(Card, {
     faceDown: true,
-    onClick: isMyTurn && room.turnPhase === 'draw' ? () => onDraw('deck') : undefined,
+    onClick: canPlay ? () => onPlayTurn('deck') : undefined,
     size: "lg"
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10.5,
-      color: '#8b96a3',
+      color: '#e2ecdf',
       marginTop: 5
     }
   }, "Talon (", room.deck.length, ")")), /*#__PURE__*/React.createElement("div", {
@@ -1091,55 +1127,17 @@ function GameTable({
   }, /*#__PURE__*/React.createElement(Card, {
     code: topDiscard,
     size: "lg",
-    onClick: isMyTurn && room.turnPhase === 'draw' ? () => onDraw('discard') : undefined
+    onClick: canPlay ? () => onPlayTurn('discard') : undefined
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10.5,
-      color: '#8b96a3',
+      color: '#e2ecdf',
       marginTop: 5
     }
-  }, "Défausse"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'center',
-      marginBottom: 12,
-      minHeight: 20
-    }
-  }, error && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: '#e18a6e',
-      fontSize: 13.5
-    }
-  }, error), !error && isMyTurn && room.turnPhase === 'discard' && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: '#d99a3c',
-      fontSize: 13.5
-    }
-  }, "À toi — sélectionne des cartes à poser, ou annonce ", CALL_NAME, "."), !error && isMyTurn && room.turnPhase === 'draw' && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: '#d99a3c',
-      fontSize: 13.5
-    }
-  }, "Pioche une carte pour terminer ton tour."), !error && !isMyTurn && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: '#8b96a3',
-      fontSize: 13.5
-    }
-  }, "En attente de ", room.players.find(p => p.id === room.currentPlayerId)?.name, "…")), isMyTurn && room.turnPhase === 'discard' && /*#__PURE__*/React.createElement("div", {
+  }, "Défausse"))), !iAmEliminated && canCall && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      gap: 10,
-      justifyContent: 'center',
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "bo-btn bo-btn-primary",
-    disabled: busy || !validSelection,
-    onClick: onDiscard
-  }, "Poser ", selected.length > 0 ? `(${selValue} pts)` : '')), canCall && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'center',
-      marginBottom: 14
+      justifyContent: 'center'
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "bo-btn bo-btn-danger",
@@ -1147,16 +1145,48 @@ function GameTable({
     onClick: onCall
   }, "Annoncer ", CALL_NAME, " !")), /*#__PURE__*/React.createElement("div", {
     style: {
-      borderTop: '1px solid #223543',
+      textAlign: 'center',
+      minHeight: 20
+    }
+  }, error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#f6b8a3',
+      fontSize: 13.5
+    }
+  }, error), !error && !iAmEliminated && isMyTurn && validSelection && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#f0c987',
+      fontSize: 13.5
+    }
+  }, "Touche le talon ou la défausse pour jouer (", selValue, " pts) !"), !error && !iAmEliminated && isMyTurn && !validSelection && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#cfe0d4',
+      fontSize: 13.5
+    }
+  }, "Sélectionne une carte, une paire/brelan/carré, ou une suite."), !error && !isMyTurn && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#cfe0d4',
+      fontSize: 13.5
+    }
+  }, "En attente de ", room.players.find(p => p.id === room.currentPlayerId)?.name, "…"))), iAmEliminated ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      color: '#cfe0d4',
+      fontSize: 13,
+      padding: '16px 0 10px'
+    }
+  }, "Bonne chance aux autres joueurs !") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: '1px solid rgba(255,255,255,0.15)',
       paddingTop: 14,
-      marginBottom: 10
+      marginTop: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 10
+      marginBottom: 6
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1174,22 +1204,21 @@ function GameTable({
   }, me?.name)), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12.5,
-      color: '#8b96a3'
+      color: '#cfe0d4'
     }
   }, "Main : ", myValue, " pts")), /*#__PURE__*/React.createElement("div", {
     ref: myHandRef,
     style: {
       display: 'flex',
       justifyContent: 'center',
-      gap: 2,
-      padding: '10px 0 16px',
+      gap: 10,
+      padding: '14px 4px 10px',
       overflowX: 'auto'
     }
   }, hand.map((c, i) => /*#__PURE__*/React.createElement("div", {
     key: c,
     style: {
-      transform: `rotate(${(i - mid) * 6}deg) translateY(${Math.abs(i - mid) * 5}px)`,
-      marginLeft: i === 0 ? 0 : -14,
+      transform: `rotate(${(i - mid) * 5}deg) translateY(${Math.abs(i - mid) * 4}px)`,
       transition: 'transform 120ms ease'
     }
   }, /*#__PURE__*/React.createElement(Card, {
@@ -1204,12 +1233,12 @@ function GameTable({
     style: {
       cursor: 'pointer',
       fontSize: 12.5,
-      color: '#8b96a3'
+      color: '#cfe0d4'
     }
   }, "Journal de la table"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: '#8b96a3',
+      color: '#cfe0d4',
       maxHeight: 110,
       overflowY: 'auto',
       marginTop: 6
@@ -1251,10 +1280,29 @@ function GameTable({
     }
   }, announcement, " annonce ", CALL_NAME, " !")));
 }
+function AnimatedNumber({
+  to
+}) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let raf;
+    const start = performance.now();
+    const dur = 750;
+    function step(now) {
+      const t = Math.min(1, (now - start) / dur);
+      setVal(Math.round(to * (1 - Math.pow(1 - t, 3))));
+      if (t < 1) raf = requestAnimationFrame(step);
+    }
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [to]);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, val);
+}
 function RoundEnd({
   room,
   isHost,
   onNext,
+  onFinish,
   busy,
   error
 }) {
@@ -1283,7 +1331,7 @@ function RoundEnd({
       gap: 8,
       margin: '18px 0'
     }
-  }, room.players.map(p => {
+  }, room.players.map((p, pi) => {
     const val = lr.values?.[p.id];
     const pts = lr.results?.[p.id];
     const hand = lr.hands?.[p.id];
@@ -1311,16 +1359,23 @@ function RoundEnd({
       style: {
         color: pts === 0 ? '#d99a3c' : '#e18a6e'
       }
-    }, "+", pts, " → ", p.score, " pts")), /*#__PURE__*/React.createElement("div", {
+    }, "+", /*#__PURE__*/React.createElement(AnimatedNumber, {
+      to: pts
+    }), " → ", p.score, " pts")), /*#__PURE__*/React.createElement("div", {
       className: "bo-card-row",
       style: {
         padding: 0
       }
-    }, hand?.map(c => /*#__PURE__*/React.createElement(Card, {
+    }, hand?.map((c, ci) => /*#__PURE__*/React.createElement("div", {
       key: c,
+      style: {
+        animation: 'boFlipIn 420ms ease both',
+        animationDelay: `${pi * 80 + ci * 60}ms`
+      }
+    }, /*#__PURE__*/React.createElement(Card, {
       code: c,
       size: "sm"
-    }))));
+    })))));
   })), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: '#e18a6e',
@@ -1334,13 +1389,13 @@ function RoundEnd({
       width: '100%'
     },
     disabled: busy,
-    onClick: onNext
-  }, busy ? 'Distribution…' : 'Manche suivante') : /*#__PURE__*/React.createElement("div", {
+    onClick: room.gameWillEnd ? onFinish : onNext
+  }, busy ? '…' : room.gameWillEnd ? 'Voir les résultats finaux' : 'Manche suivante') : /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       color: '#8b96a3'
     }
-  }, "En attente que l'hôte distribue la manche suivante…")));
+  }, room.gameWillEnd ? "En attente que l'hôte affiche les résultats…" : "En attente que l'hôte distribue la manche suivante…")));
 }
 function GameOver({
   room,
@@ -1561,8 +1616,7 @@ function App() {
       isMyTurn: isMyTurn,
       selected: selected,
       toggleCard: toggleCard,
-      onDraw: src => act(s => mutDraw(s, myId, src)),
-      onDiscard: () => act(s => mutDiscard(s, myId, selected)),
+      onPlayTurn: src => act(s => mutPlayTurn(s, myId, selected, src)),
       onCall: () => act(s => mutCallBolivienne(s, myId)),
       busy: busy,
       error: error
@@ -1572,6 +1626,7 @@ function App() {
     room: room,
     isHost: isHost,
     onNext: () => act(s => mutNextRound(s, myId)),
+    onFinish: () => act(s => mutFinishGame(s, myId)),
     busy: busy,
     error: error
   });
