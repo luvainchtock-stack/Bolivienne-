@@ -1173,7 +1173,7 @@ function GameTable({
     style: {
       position: 'relative',
       height: 82,
-      width: 58 + Math.max(1, pileFan.length) * 16,
+      width: 58 + Math.max(1, pileFan.length - 1) * 30,
       margin: '0 auto'
     }
   }, pileFan.length === 0 && /*#__PURE__*/React.createElement("div", {
@@ -1193,9 +1193,9 @@ function GameTable({
       key: code + i,
       style: {
         position: 'absolute',
-        left: i * 16,
+        left: i * 30,
         top: 0,
-        transform: `rotate(${-8 + i * 6}deg)`,
+        transform: `rotate(${i * 2}deg)`,
         zIndex: i
       }
     }, /*#__PURE__*/React.createElement(Card, {
@@ -1307,6 +1307,9 @@ function GameTable({
         transition: isDragging ? 'none' : 'transform 160ms ease',
         zIndex: isDragging ? 50 : 1,
         touchAction: 'pan-y',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
         cursor: 'grab'
       }
     }, /*#__PURE__*/React.createElement(Card, {
