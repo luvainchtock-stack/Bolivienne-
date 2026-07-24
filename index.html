@@ -503,6 +503,7 @@ function Shell({
         .bo-card-row { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 14px; }
         @keyframes boPop { 0%{ transform:scale(0.6); opacity:0; } 15%{ transform:scale(1.08); opacity:1; } 25%{ transform:scale(1); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(0.95); } }
         @keyframes boFlipIn { 0%{ transform: scaleX(0.05) rotateY(-90deg); opacity:0; } 60%{ transform: scaleX(1.05) rotateY(0deg); } 100%{ transform: scaleX(1) rotateY(0deg); opacity:1; } }
+        @keyframes boFall { 0%{ transform: translateY(0) rotate(0deg); opacity:1; } 100%{ transform: translateY(110vh) rotate(360deg); opacity:0.3; } }
       `), children);
 }
 function CenteredMessage({
@@ -925,6 +926,7 @@ function GameTable({
   const active = room.players.filter(p => !p.eliminated);
   const others = active.filter(p => p.id !== myId);
   const topDiscard = room.turnStartPickup;
+  const pileFan = (room.discard || []).slice(-4);
   const myValue = me ? handValue(me.hand) : 0;
   const canCall = isMyTurn && room.turnPhase === 'discard' && myValue <= CALL_THRESHOLD;
   const deckRef = useRef(null);
@@ -934,6 +936,73 @@ function GameTable({
   const prevRoomRef = useRef(null);
   const [flyers, setFlyers] = useState([]);
   const [announcement, setAnnouncement] = useState(null);
+  const [handOrder, setHandOrder] = useState([]);
+  const [dragId, setDragId] = useState(null);
+  const dragStateRef = useRef({});
+  const justDraggedRef = useRef(false);
+  const myHand = me?.hand || [];
+  useEffect(() => {
+    setHandOrder(prev => {
+      const stillThere = prev.filter(c => myHand.includes(c));
+      const added = myHand.filter(c => !prev.includes(c));
+      return [...stillThere, ...added];
+    });
+  }, [myHand.join('|')]);
+  function handlePointerDown(e, cardId) {
+    dragStateRef.current = {
+      cardId,
+      startX: e.clientX,
+      startY: e.clientY,
+      armed: false,
+      longPressTimer: null,
+      moved: false
+    };
+    dragStateRef.current.longPressTimer = setTimeout(() => {
+      dragStateRef.current.armed = true;
+      setDragId(cardId);
+    }, 260);
+  }
+  useEffect(() => {
+    function onMove(e) {
+      const ds = dragStateRef.current;
+      if (!ds.cardId) return;
+      const dx = Math.abs(e.clientX - ds.startX);
+      const dy = Math.abs(e.clientY - ds.startY);
+      if (!ds.armed && (dx > 8 || dy > 8)) {
+        clearTimeout(ds.longPressTimer);
+        dragStateRef.current = {};
+        return;
+      }
+      if (ds.armed && myHandRef.current) {
+        ds.moved = true;
+        const rect = myHandRef.current.getBoundingClientRect();
+        const relX = e.clientX - rect.left;
+        const slotWidth = rect.width / Math.max(1, handOrder.length);
+        let targetIndex = Math.floor(relX / slotWidth);
+        targetIndex = Math.max(0, Math.min(handOrder.length - 1, targetIndex));
+        const currentIndex = handOrder.indexOf(ds.cardId);
+        if (targetIndex !== currentIndex && currentIndex !== -1) {
+          const next = [...handOrder];
+          next.splice(currentIndex, 1);
+          next.splice(targetIndex, 0, ds.cardId);
+          setHandOrder(next);
+        }
+      }
+    }
+    function onUp() {
+      const ds = dragStateRef.current;
+      if (ds.longPressTimer) clearTimeout(ds.longPressTimer);
+      if (ds.moved) justDraggedRef.current = true;
+      dragStateRef.current = {};
+      setDragId(null);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [handOrder]);
   function addFlyer(fromEl, toEl, code, faceDown, offsetX, offsetY) {
     if (!fromEl || !toEl) return;
     try {
@@ -978,7 +1047,7 @@ function GameTable({
   }, [room]);
   const selValue = selected.reduce((s, c) => s + valueOf(c), 0);
   const validSelection = selected.length > 0 && isValidDiscard(selected);
-  const hand = me?.hand || [];
+  const hand = handOrder;
   const mid = (hand.length - 1) / 2;
   const canPlay = isMyTurn && room.turnPhase === 'discard' && validSelection && !busy;
   const iAmEliminated = !!me?.eliminated;
@@ -1098,15 +1167,16 @@ function GameTable({
     ref: discardRef,
     style: {
       textAlign: 'center',
-      position: 'relative',
-      width: 58 + 14
+      position: 'relative'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
-      height: 82
+      height: 82,
+      width: 58 + Math.max(1, pileFan.length) * 16,
+      margin: '0 auto'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, pileFan.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'absolute',
       left: 0,
@@ -1117,24 +1187,29 @@ function GameTable({
   }, /*#__PURE__*/React.createElement(Card, {
     faceDown: true,
     size: "lg"
-  })), topDiscard && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'absolute',
-      left: 14,
-      top: 0,
-      transform: 'rotate(4deg)'
-    }
-  }, /*#__PURE__*/React.createElement(Card, {
-    code: topDiscard,
-    size: "lg",
-    onClick: canPlay ? () => onPlayTurn('discard') : undefined
-  }))), /*#__PURE__*/React.createElement("div", {
+  })), pileFan.map((code, i) => {
+    const isTop = i === pileFan.length - 1;
+    return /*#__PURE__*/React.createElement("div", {
+      key: code + i,
+      style: {
+        position: 'absolute',
+        left: i * 16,
+        top: 0,
+        transform: `rotate(${-8 + i * 6}deg)`,
+        zIndex: i
+      }
+    }, /*#__PURE__*/React.createElement(Card, {
+      code: code,
+      size: "lg",
+      onClick: isTop && canPlay ? () => onPlayTurn('discard') : undefined
+    }));
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10.5,
       color: '#e2ecdf',
       marginTop: 5
     }
-  }, "Défausse"))), !iAmEliminated && canCall && /*#__PURE__*/React.createElement("div", {
+  }, "Défausse", pileFan.length > 1 ? ` (${pileFan.length})` : ''))), !iAmEliminated && canCall && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'center'
@@ -1213,19 +1288,32 @@ function GameTable({
       justifyContent: 'center',
       gap: 10,
       padding: '14px 4px 10px',
-      overflowX: 'auto'
+      overflowX: dragId ? 'hidden' : 'auto'
     }
-  }, hand.map((c, i) => /*#__PURE__*/React.createElement("div", {
-    key: c,
-    style: {
-      transform: `rotate(${(i - mid) * 5}deg) translateY(${Math.abs(i - mid) * 4}px)`,
-      transition: 'transform 120ms ease'
-    }
-  }, /*#__PURE__*/React.createElement(Card, {
-    code: c,
-    selected: selected.includes(c),
-    onClick: () => toggleCard(c)
-  }))))), /*#__PURE__*/React.createElement("details", {
+  }, hand.map((c, i) => {
+    const isDragging = dragId === c;
+    return /*#__PURE__*/React.createElement("div", {
+      key: c,
+      onPointerDown: e => handlePointerDown(e, c),
+      onClick: () => {
+        if (justDraggedRef.current) {
+          justDraggedRef.current = false;
+          return;
+        }
+        toggleCard(c);
+      },
+      style: {
+        transform: isDragging ? `scale(1.12) translateY(-14px)` : `rotate(${(i - mid) * 5}deg) translateY(${Math.abs(i - mid) * 4}px)`,
+        transition: isDragging ? 'none' : 'transform 160ms ease',
+        zIndex: isDragging ? 50 : 1,
+        touchAction: 'pan-y',
+        cursor: 'grab'
+      }
+    }, /*#__PURE__*/React.createElement(Card, {
+      code: c,
+      selected: selected.includes(c)
+    }));
+  }))), /*#__PURE__*/React.createElement("details", {
     style: {
       marginTop: 8
     }
@@ -1397,29 +1485,71 @@ function RoundEnd({
     }
   }, room.gameWillEnd ? "En attente que l'hôte affiche les résultats…" : "En attente que l'hôte distribue la manche suivante…")));
 }
+function Confetti() {
+  const pieces = React.useMemo(() => Array.from({
+    length: 26
+  }).map((_, i) => ({
+    left: Math.random() * 100,
+    delay: Math.random() * 500,
+    dur: 1800 + Math.random() * 900,
+    color: ['#d99a3c', '#f6efe0', '#4d8b7c', '#a5432c', '#c2a13a'][i % 5],
+    rotate: Math.random() * 360
+  })), []);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      overflow: 'hidden',
+      pointerEvents: 'none',
+      zIndex: 1
+    }
+  }, pieces.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      position: 'absolute',
+      left: p.left + '%',
+      top: -20,
+      width: 8,
+      height: 14,
+      background: p.color,
+      transform: `rotate(${p.rotate}deg)`,
+      animation: `boFall ${p.dur}ms ease-in ${p.delay}ms both`
+    }
+  })));
+}
 function GameOver({
   room,
   myId
 }) {
   const winner = room.players.find(p => p.id === room.winnerId);
   const ranked = [...room.players].sort((a, b) => a.score - b.score);
-  return /*#__PURE__*/React.createElement(Shell, null, /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(Shell, {
+    felt: true
+  }, /*#__PURE__*/React.createElement(Confetti, null), /*#__PURE__*/React.createElement("div", {
     style: {
       maxWidth: 420,
       margin: '40px auto',
-      textAlign: 'center'
+      textAlign: 'center',
+      position: 'relative',
+      zIndex: 2
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      fontSize: 44,
+      animation: 'boPop 900ms ease both'
+    }
+  }, "🏆"), /*#__PURE__*/React.createElement("div", {
+    style: {
       fontSize: 13,
-      color: '#8b96a3',
-      letterSpacing: 2
+      color: '#cfe0d4',
+      letterSpacing: 2,
+      marginTop: 6
     }
   }, "FIN DE LA PARTIE"), /*#__PURE__*/React.createElement("h1", {
     className: "bo-title",
     style: {
       fontSize: 32,
-      color: '#d99a3c',
+      color: '#f0c987',
       margin: '6px 0 24px'
     }
   }, winner?.name, " remporte la table !"), /*#__PURE__*/React.createElement("div", {
@@ -1433,14 +1563,14 @@ function GameOver({
     style: {
       display: 'flex',
       justifyContent: 'space-between',
-      background: '#16212c',
-      border: '1px solid #223543',
+      background: 'rgba(0,0,0,0.25)',
+      border: '1px solid rgba(255,255,255,0.15)',
       borderRadius: 10,
       padding: '10px 14px'
     }
   }, /*#__PURE__*/React.createElement("span", null, i + 1, ". ", p.name, p.id === myId ? ' (toi)' : ''), /*#__PURE__*/React.createElement("span", {
     style: {
-      color: '#8b96a3'
+      color: '#cfe0d4'
     }
   }, p.score, " pts", p.eliminated && p.id !== room.winnerId ? ' — éliminé' : ''))))));
 }
