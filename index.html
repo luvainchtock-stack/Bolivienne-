@@ -330,13 +330,20 @@ function mutCallBolivienne(state, byId) {
   if (handValue(player.hand) > CALL_THRESHOLD) return {
     error: `Ta main doit valoir ${CALL_THRESHOLD} points ou moins.`
   };
-  state.lastAction = {
-    seq: (state.lastAction ? state.lastAction.seq : 0) + 1,
+  const result = mutEndRound(state, byId, false);
+  if (result.error) return result;
+  const s = result.state;
+  const lr = s.lastRound;
+  s.lastAction = {
+    seq: (s.lastAction ? s.lastAction.seq : 0) + 1,
     type: 'announce',
     actorId: byId,
-    name: player.name
+    name: player.name,
+    success: !!lr.callerWon
   };
-  return mutEndRound(state, byId, false);
+  return {
+    state: s
+  };
 }
 function mutEndRound(state, callerId, selfEmptied) {
   const active = state.players.filter(p => !p.eliminated);
@@ -504,6 +511,8 @@ function Shell({
         @keyframes boPop { 0%{ transform:scale(0.6); opacity:0; } 15%{ transform:scale(1.08); opacity:1; } 25%{ transform:scale(1); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(0.95); } }
         @keyframes boFlipIn { 0%{ transform: scaleX(0.05) rotateY(-90deg); opacity:0; } 60%{ transform: scaleX(1.05) rotateY(0deg); } 100%{ transform: scaleX(1) rotateY(0deg); opacity:1; } }
         @keyframes boFall { 0%{ transform: translateY(0) rotate(0deg); opacity:1; } 100%{ transform: translateY(110vh) rotate(360deg); opacity:0.3; } }
+        @keyframes boShake { 0%{ transform:scale(0.5) rotate(-8deg); opacity:0; } 12%{ transform:scale(1.15) rotate(6deg); opacity:1; } 20%{ transform:scale(1) rotate(-4deg); } 28%{ transform:scale(1) rotate(3deg); } 36%{ transform:scale(1) rotate(0deg); } 85%{ opacity:1; } 100%{ opacity:0; transform:scale(0.9); } }
+        @keyframes boGlow { 0%, 100%{ box-shadow: 0 4px 16px rgba(217,154,60,0.5); } 50%{ box-shadow: 0 4px 26px rgba(217,154,60,0.95); } }
       `), children);
 }
 function CenteredMessage({
@@ -861,7 +870,8 @@ function detectAnimationEvents(prevRoom, newRoom) {
   } else if (la.type === 'announce') {
     events.push({
       type: 'announce',
-      actorName: la.name
+      actorName: la.name,
+      success: la.success
     });
   }
   return events;
@@ -1038,8 +1048,11 @@ function GameTable({
             setTimeout(() => addFlyer(fromEl, toEl, code, false, i * 5, i * -3), i * 90);
           });
         } else if (ev.type === 'announce') {
-          setAnnouncement(ev.actorName);
-          setTimeout(() => setAnnouncement(null), 1800);
+          setAnnouncement({
+            actorName: ev.actorName,
+            success: ev.success
+          });
+          setTimeout(() => setAnnouncement(null), 2000);
         }
       });
     } catch (e) {/* animation layer must never crash the game */}
@@ -1090,7 +1103,21 @@ function GameTable({
       fontSize: 13,
       color: '#f0c987'
     }
-  }, "Tu es éliminé — tu suis la partie en spectateur."), /*#__PURE__*/React.createElement("div", {
+  }, "Tu es éliminé — tu suis la partie en spectateur."), !iAmEliminated && isMyTurn && /*#__PURE__*/React.createElement("div", {
+    className: "bo-title",
+    style: {
+      textAlign: 'center',
+      background: '#d99a3c',
+      color: '#1a1208',
+      fontSize: 20,
+      letterSpacing: 1,
+      padding: '8px 12px',
+      borderRadius: 10,
+      marginBottom: 10,
+      boxShadow: '0 4px 16px rgba(217,154,60,0.5)',
+      animation: 'boGlow 1400ms ease-in-out infinite'
+    }
+  }, "À TON TOUR !"), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       display: 'flex',
@@ -1357,7 +1384,7 @@ function GameTable({
       pointerEvents: 'none',
       padding: '0 16px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, announcement.success ? /*#__PURE__*/React.createElement("div", {
     className: "bo-title",
     style: {
       display: 'inline-block',
@@ -1367,9 +1394,30 @@ function GameTable({
       borderRadius: 14,
       fontSize: 22,
       boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-      animation: 'boPop 1800ms ease'
+      animation: 'boPop 2000ms ease'
     }
-  }, announcement, " annonce ", CALL_NAME, " !")));
+  }, announcement.actorName, " annonce ", CALL_NAME, " !") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "bo-title",
+    style: {
+      display: 'inline-block',
+      background: '#d99a3c',
+      color: '#1a1208',
+      padding: '18px 30px',
+      borderRadius: 16,
+      fontSize: 40,
+      letterSpacing: 2,
+      boxShadow: '0 10px 30px rgba(0,0,0,0.55)',
+      animation: 'boShake 2000ms ease'
+    }
+  }, "POIIIN POIIIN !"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      fontSize: 15,
+      color: '#f6efe0',
+      fontWeight: 700,
+      textShadow: '0 2px 6px rgba(0,0,0,0.6)'
+    }
+  }, announcement.actorName, " s'est planté sur ", CALL_NAME, " !"))));
 }
 function AnimatedNumber({
   to
@@ -1522,7 +1570,8 @@ function Confetti() {
 }
 function GameOver({
   room,
-  myId
+  myId,
+  onGoHome
 }) {
   const winner = room.players.find(p => p.id === room.winnerId);
   const ranked = [...room.players].sort((a, b) => a.score - b.score);
@@ -1559,7 +1608,8 @@ function GameOver({
     style: {
       display: 'flex',
       flexDirection: 'column',
-      gap: 8
+      gap: 8,
+      marginBottom: 24
     }
   }, ranked.map((p, i) => /*#__PURE__*/React.createElement("div", {
     key: p.id,
@@ -1575,7 +1625,13 @@ function GameOver({
     style: {
       color: '#cfe0d4'
     }
-  }, p.score, " pts", p.eliminated && p.id !== room.winnerId ? ' — éliminé' : ''))))));
+  }, p.score, " pts", p.eliminated && p.id !== room.winnerId ? ' — éliminé' : '')))), /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-primary",
+    style: {
+      width: '100%'
+    },
+    onClick: onGoHome
+  }, "Retour à l'accueil")));
 }
 
 // ---------------------------------------------------------------------------
@@ -1720,6 +1776,16 @@ function App() {
     if (!isMyTurn || room.turnPhase !== 'discard') return;
     setSelected(sel => sel.includes(c) ? sel.filter(x => x !== c) : [...sel, c]);
   }
+  function goHome() {
+    setRoomCode(null);
+    setRoom(null);
+    setMyId(null);
+    setSelected([]);
+    setNameInput('');
+    setCodeInput('');
+    setError('');
+    window.history.replaceState(null, '', window.location.pathname);
+  }
   if (!roomCode) return /*#__PURE__*/React.createElement(Landing, {
     nameInput,
     setNameInput,
@@ -1765,7 +1831,8 @@ function App() {
   });
   if (room.phase === 'gameOver') return /*#__PURE__*/React.createElement(GameOver, {
     room: room,
-    myId: myId
+    myId: myId,
+    onGoHome: goHome
   });
   return null;
 }
