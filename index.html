@@ -896,7 +896,7 @@ function FlyingCard({
     const raf1 = requestAnimationFrame(() => {
       const raf2 = requestAnimationFrame(() => setMoved(true));
     });
-    const t = setTimeout(onDone, 480);
+    const t = setTimeout(onDone, 720);
     return () => {
       clearTimeout(t);
     };
@@ -911,7 +911,7 @@ function FlyingCard({
       width: from.width,
       height: from.height,
       transform: moved ? `translate(${dx}px, ${dy}px) scale(0.85)` : 'translate(0px, 0px) scale(1)',
-      transition: 'transform 420ms cubic-bezier(.22,.68,.32,1)',
+      transition: 'transform 650ms cubic-bezier(.22,.68,.32,1)',
       zIndex: 9999,
       pointerEvents: 'none'
     }
@@ -945,7 +945,6 @@ function GameTable({
   const oppRefsMap = useRef({});
   const prevRoomRef = useRef(null);
   const [flyers, setFlyers] = useState([]);
-  const [announcement, setAnnouncement] = useState(null);
   const [handOrder, setHandOrder] = useState([]);
   const [dragId, setDragId] = useState(null);
   const dragStateRef = useRef({});
@@ -1029,7 +1028,7 @@ function GameTable({
         from: rectToBox(fromRect),
         to: toBox
       }]);
-      setTimeout(() => setFlyers(fl => fl.filter(f => f.id !== id)), 520);
+      setTimeout(() => setFlyers(fl => fl.filter(f => f.id !== id)), 760);
     } catch (e) {/* never let animation issues break gameplay */}
   }
   useEffect(() => {
@@ -1045,14 +1044,8 @@ function GameTable({
           const fromEl = ev.actorId === myId ? myHandRef.current : oppRefsMap.current[ev.actorId];
           const toEl = discardRef.current;
           (ev.codes || []).forEach((code, i) => {
-            setTimeout(() => addFlyer(fromEl, toEl, code, false, i * 5, i * -3), i * 90);
+            setTimeout(() => addFlyer(fromEl, toEl, code, false, i * 5, i * -3), i * 130);
           });
-        } else if (ev.type === 'announce') {
-          setAnnouncement({
-            actorName: ev.actorName,
-            success: ev.success
-          });
-          setTimeout(() => setAnnouncement(null), 2000);
         }
       });
     } catch (e) {/* animation layer must never crash the game */}
@@ -1373,7 +1366,13 @@ function GameTable({
     code: f.code,
     faceDown: f.faceDown,
     onDone: () => setFlyers(fl => fl.filter(x => x.id !== f.id))
-  })), announcement && /*#__PURE__*/React.createElement("div", {
+  })));
+}
+function AnnouncementBanner({
+  announcement
+}) {
+  if (!announcement) return null;
+  return /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'fixed',
       left: 0,
@@ -1417,7 +1416,7 @@ function GameTable({
       fontWeight: 700,
       textShadow: '0 2px 6px rgba(0,0,0,0.6)'
     }
-  }, announcement.actorName, " s'est planté sur ", CALL_NAME, " !"))));
+  }, announcement.actorName, " s'est planté sur ", CALL_NAME, " !")));
 }
 function AnimatedNumber({
   to
@@ -1646,6 +1645,23 @@ function App() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState([]);
+  const [announcement, setAnnouncement] = useState(null);
+  const prevAnnounceRoomRef = useRef(null);
+  useEffect(() => {
+    try {
+      const events = detectAnimationEvents(prevAnnounceRoomRef.current, room);
+      events.forEach(ev => {
+        if (ev.type === 'announce') {
+          setAnnouncement({
+            actorName: ev.actorName,
+            success: ev.success
+          });
+          setTimeout(() => setAnnouncement(null), 2000);
+        }
+      });
+    } catch (e) {/* never let the banner break gameplay */}
+    prevAnnounceRoomRef.current = room;
+  }, [room]);
   useEffect(() => {
     // Pick up ?table=CODE from the URL so shared links auto-fill the code.
     const params = new URLSearchParams(window.location.search);
@@ -1786,7 +1802,8 @@ function App() {
     setError('');
     window.history.replaceState(null, '', window.location.pathname);
   }
-  if (!roomCode) return /*#__PURE__*/React.createElement(Landing, {
+  let screen;
+  if (!roomCode) screen = /*#__PURE__*/React.createElement(Landing, {
     nameInput,
     setNameInput,
     codeInput,
@@ -1795,20 +1812,17 @@ function App() {
     handleJoin,
     error,
     busy
-  });
-  if (!room) return /*#__PURE__*/React.createElement(CenteredMessage, {
+  });else if (!room) screen = /*#__PURE__*/React.createElement(CenteredMessage, {
     text: "Connexion à la table…"
-  });
-  if (room.phase === 'lobby') return /*#__PURE__*/React.createElement(Lobby, {
+  });else if (room.phase === 'lobby') screen = /*#__PURE__*/React.createElement(Lobby, {
     room: room,
     myId: myId,
     isHost: isHost,
     onStart: () => act(s => mutStartGame(s, myId)),
     busy: busy,
     error: error
-  });
-  if (room.phase === 'playing') {
-    return /*#__PURE__*/React.createElement(GameTable, {
+  });else if (room.phase === 'playing') {
+    screen = /*#__PURE__*/React.createElement(GameTable, {
       room: room,
       me: me,
       myId: myId,
@@ -1820,21 +1834,27 @@ function App() {
       busy: busy,
       error: error
     });
+  } else if (room.phase === 'roundEnd') {
+    screen = /*#__PURE__*/React.createElement(RoundEnd, {
+      room: room,
+      isHost: isHost,
+      onNext: () => act(s => mutNextRound(s, myId)),
+      onFinish: () => act(s => mutFinishGame(s, myId)),
+      busy: busy,
+      error: error
+    });
+  } else if (room.phase === 'gameOver') {
+    screen = /*#__PURE__*/React.createElement(GameOver, {
+      room: room,
+      myId: myId,
+      onGoHome: goHome
+    });
+  } else {
+    screen = null;
   }
-  if (room.phase === 'roundEnd') return /*#__PURE__*/React.createElement(RoundEnd, {
-    room: room,
-    isHost: isHost,
-    onNext: () => act(s => mutNextRound(s, myId)),
-    onFinish: () => act(s => mutFinishGame(s, myId)),
-    busy: busy,
-    error: error
-  });
-  if (room.phase === 'gameOver') return /*#__PURE__*/React.createElement(GameOver, {
-    room: room,
-    myId: myId,
-    onGoHome: goHome
-  });
-  return null;
+  return /*#__PURE__*/React.createElement(React.Fragment, null, screen, /*#__PURE__*/React.createElement(AnnouncementBanner, {
+    announcement: announcement
+  }));
 }
 class ErrorBoundary extends React.Component {
   constructor(props) {
