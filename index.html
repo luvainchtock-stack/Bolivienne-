@@ -1383,19 +1383,28 @@ function AnnouncementBanner({
       pointerEvents: 'none',
       padding: '0 16px'
     }
-  }, announcement.success ? /*#__PURE__*/React.createElement("div", {
+  }, announcement.success ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "bo-title",
     style: {
       display: 'inline-block',
-      background: '#a5432c',
+      background: '#4d8b7c',
       color: '#f6efe0',
-      padding: '14px 24px',
-      borderRadius: 14,
-      fontSize: 22,
-      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-      animation: 'boPop 2000ms ease'
+      padding: '18px 30px',
+      borderRadius: 16,
+      fontSize: 40,
+      letterSpacing: 2,
+      boxShadow: '0 10px 30px rgba(0,0,0,0.55)',
+      animation: 'boShake 2000ms ease'
     }
-  }, announcement.actorName, " annonce ", CALL_NAME, " !") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "IL EST CHOOOOOO !"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      fontSize: 15,
+      color: '#f6efe0',
+      fontWeight: 700,
+      textShadow: '0 2px 6px rgba(0,0,0,0.6)'
+    }
+  }, announcement.actorName, " annonce ", CALL_NAME, " et remporte la manche !")) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "bo-title",
     style: {
       display: 'inline-block',
