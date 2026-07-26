@@ -637,6 +637,15 @@ function CenteredMessage({
     }
   }, text));
 }
+const CARD_SIZES = {
+  sm: 48,
+  md: 68,
+  lg: 92
+};
+function cardH(w) {
+  return Math.round(w * (128 / 96));
+}
+const LG_CARD_H = cardH(CARD_SIZES.lg);
 function Card({
   code,
   size = 'md',
@@ -644,8 +653,8 @@ function Card({
   onClick,
   faceDown
 }) {
-  const w = size === 'sm' ? 48 : size === 'lg' ? 92 : 68;
-  const h = Math.round(w * (128 / 96));
+  const w = CARD_SIZES[size] || CARD_SIZES.md;
+  const h = cardH(w);
   const key = faceDown ? 'BACK' : pixelCardKey(code);
   const src = PIXEL_CARDS[key];
   return /*#__PURE__*/React.createElement("div", {
@@ -1170,7 +1179,7 @@ function GameTable({
   const validSelection = selected.length > 0 && isValidDiscard(selected);
   const hand = handOrder;
   const mid = (hand.length - 1) / 2;
-  const HAND_CARD_W = 68; // must match Card's 'md' width
+  const HAND_CARD_W = CARD_SIZES.md;
   const HAND_GAP = 8;
   let handStep = HAND_CARD_W + HAND_GAP;
   if (hand.length > 1) {
@@ -1240,7 +1249,7 @@ function GameTable({
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
-      gap: 18
+      gap: 22
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1316,8 +1325,8 @@ function GameTable({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
-      height: 82,
-      width: 58 + Math.max(1, pileFan.length - 1) * 30,
+      height: LG_CARD_H,
+      width: 92 + Math.max(1, pileFan.length - 1) * 30,
       margin: '0 auto'
     }
   }, pileFan.length === 0 && /*#__PURE__*/React.createElement("div", {
@@ -1365,7 +1374,8 @@ function GameTable({
   }, "Annoncer ", CALL_NAME, " !")), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
-      minHeight: 20
+      minHeight: 20,
+      marginTop: 4
     }
   }, error && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1449,7 +1459,7 @@ function GameTable({
       },
       style: {
         marginLeft: i === 0 ? 0 : handStep - HAND_CARD_W,
-        transform: isDragging ? `scale(1.12) translateY(-14px)` : `rotate(${(i - mid) * 5}deg) translateY(${Math.abs(i - mid) * 4}px)`,
+        transform: isDragging ? `scale(1.12) translateY(-14px)` : 'none',
         transition: isDragging ? 'none' : 'transform 160ms ease',
         zIndex: isDragging ? 50 : isSelected ? 40 : i,
         touchAction: 'pan-y',
