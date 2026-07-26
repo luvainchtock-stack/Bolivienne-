@@ -528,8 +528,7 @@ function mutRemoveBot(state, byId, botId) {
 // ---------------------------------------------------------------------------
 // Bot AI (single tier for now — calibrate before adding difficulty levels)
 // ---------------------------------------------------------------------------
-const BOT_CALL_THRESHOLD = 5; // more conservative than the max allowed (9), to reduce Assaf risk
-const BOT_PICKUP_MAX_VALUE = 4; // only takes the discard pile if it's a cheap card
+const BOT_PICKUP_CHEAP_VALUE = 4; // a pickup this cheap or less is worth taking even without a combo
 
 function allSubsets(arr) {
   const result = [[]];
@@ -553,19 +552,41 @@ function botBestDiscard(hand) {
   }
   return best;
 }
-function botChooseDrawSource(state) {
+// Does adding the pickup card to the hand unlock a pair/set or run (i.e. is it "useful"),
+// not just cheap on its own?
+function botPickupCompletesCombo(hand, pickup) {
+  for (const combo of allSubsets(hand)) {
+    const withPickup = [...combo, pickup];
+    if (withPickup.length >= 2 && isValidDiscard(withPickup)) return true;
+  }
+  return false;
+}
+function botChooseDrawSource(state, hand) {
   const pickup = state.turnStartPickup;
   if (!pickup) return 'deck';
-  return valueOf(pickup) <= BOT_PICKUP_MAX_VALUE ? 'discard' : 'deck';
+  const useful = botPickupCompletesCombo(hand, pickup);
+  const cheap = valueOf(pickup) <= BOT_PICKUP_CHEAP_VALUE;
+  // Probabilistic rather than a hard cutoff, so the bot doesn't play identically every time.
+  let pTakeDiscard;
+  if (useful) pTakeDiscard = 0.85;else if (cheap) pTakeDiscard = 0.55;else pTakeDiscard = 0.08;
+  return Math.random() < pTakeDiscard ? 'discard' : 'deck';
+}
+function botShouldCall(handVal) {
+  if (handVal > CALL_THRESHOLD) return false; // hard rule, can never call above the game's own limit
+  // The lower the hand, the more likely the bot calls — but it's not a hard cutoff,
+  // so behavior varies from game to game instead of always waiting for the same number.
+  let p;
+  if (handVal <= 1) p = 0.97;else if (handVal <= 3) p = 0.8;else if (handVal <= 5) p = 0.55;else if (handVal <= 7) p = 0.3;else p = 0.12;
+  return Math.random() < p;
 }
 function botChooseMove(state, botId) {
   const bot = state.players.find(p => p.id === botId);
   const handVal = handValue(bot.hand);
-  if (handVal <= BOT_CALL_THRESHOLD) return {
+  if (botShouldCall(handVal)) return {
     type: 'call'
   };
   const cardIds = botBestDiscard(bot.hand);
-  const source = botChooseDrawSource(state);
+  const source = botChooseDrawSource(state, bot.hand);
   return {
     type: 'play',
     cardIds,
@@ -623,7 +644,7 @@ function Card({
   onClick,
   faceDown
 }) {
-  const w = size === 'sm' ? 45 : size === 'lg' ? 87 : 63;
+  const w = size === 'sm' ? 48 : size === 'lg' ? 100 : 78;
   const h = Math.round(w * (128 / 96));
   const key = faceDown ? 'BACK' : pixelCardKey(code);
   const src = PIXEL_CARDS[key];
@@ -1206,7 +1227,7 @@ function GameTable({
     style: {
       display: 'flex',
       flexWrap: 'wrap',
-      justifyContent: 'center',
+      justifyContent: others.length > 1 ? 'space-between' : 'center',
       gap: 18
     }
   }, others.map(p => {
