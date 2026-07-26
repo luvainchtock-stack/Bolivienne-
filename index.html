@@ -644,7 +644,7 @@ function Card({
   onClick,
   faceDown
 }) {
-  const w = size === 'sm' ? 48 : size === 'lg' ? 100 : 78;
+  const w = size === 'sm' ? 48 : size === 'lg' ? 92 : 68;
   const h = Math.round(w * (128 / 96));
   const key = faceDown ? 'BACK' : pixelCardKey(code);
   const src = PIXEL_CARDS[key];
@@ -1055,6 +1055,16 @@ function GameTable({
   const dragStateRef = useRef({});
   const justDraggedRef = useRef(false);
   const myHand = me?.hand || [];
+  const [handAreaWidth, setHandAreaWidth] = useState(340);
+  useEffect(() => {
+    if (!myHandRef.current) return;
+    const el = myHandRef.current;
+    const update = () => setHandAreaWidth(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     setHandOrder(prev => {
       const stillThere = prev.filter(c => myHand.includes(c));
@@ -1160,6 +1170,15 @@ function GameTable({
   const validSelection = selected.length > 0 && isValidDiscard(selected);
   const hand = handOrder;
   const mid = (hand.length - 1) / 2;
+  const HAND_CARD_W = 68; // must match Card's 'md' width
+  const HAND_GAP = 8;
+  let handStep = HAND_CARD_W + HAND_GAP;
+  if (hand.length > 1) {
+    const naturalWidth = HAND_CARD_W + (hand.length - 1) * handStep;
+    if (naturalWidth > handAreaWidth) {
+      handStep = Math.max(HAND_CARD_W * 0.32, (handAreaWidth - HAND_CARD_W) / (hand.length - 1));
+    }
+  }
   const canPlay = isMyTurn && room.turnPhase === 'discard' && validSelection && !busy;
   const iAmEliminated = !!me?.eliminated;
   return /*#__PURE__*/React.createElement(Shell, {
@@ -1411,12 +1430,13 @@ function GameTable({
     style: {
       display: 'flex',
       justifyContent: 'center',
-      gap: 10,
+      gap: 0,
       padding: '14px 4px 10px',
       overflowX: dragId ? 'hidden' : 'auto'
     }
   }, hand.map((c, i) => {
     const isDragging = dragId === c;
+    const isSelected = selected.includes(c);
     return /*#__PURE__*/React.createElement("div", {
       key: c,
       onPointerDown: e => handlePointerDown(e, c),
@@ -1428,9 +1448,10 @@ function GameTable({
         toggleCard(c);
       },
       style: {
+        marginLeft: i === 0 ? 0 : handStep - HAND_CARD_W,
         transform: isDragging ? `scale(1.12) translateY(-14px)` : `rotate(${(i - mid) * 5}deg) translateY(${Math.abs(i - mid) * 4}px)`,
         transition: isDragging ? 'none' : 'transform 160ms ease',
-        zIndex: isDragging ? 50 : 1,
+        zIndex: isDragging ? 50 : isSelected ? 40 : i,
         touchAction: 'pan-y',
         userSelect: 'none',
         WebkitUserSelect: 'none',
@@ -1439,7 +1460,7 @@ function GameTable({
       }
     }, /*#__PURE__*/React.createElement(Card, {
       code: c,
-      selected: selected.includes(c)
+      selected: isSelected
     }));
   }))), /*#__PURE__*/React.createElement("details", {
     style: {
