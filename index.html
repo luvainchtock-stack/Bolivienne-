@@ -487,9 +487,91 @@ function mutJoin(state, name, existingId) {
     myId: id
   };
 }
+function mutAddBot(state, byId) {
+  if (state.phase !== 'lobby') return {
+    error: 'La partie a déjà commencé.'
+  };
+  if (state.hostId !== byId) return {
+    error: "Seul l'hôte peut ajouter un bot."
+  };
+  if (state.players.length >= 10) return {
+    error: 'Table pleine (10 joueurs max).'
+  };
+  const botCount = state.players.filter(p => p.isBot).length + 1;
+  const id = 'bot-' + uid();
+  state.players.push({
+    id,
+    name: `Bot ${botCount}`,
+    score: 0,
+    hand: [],
+    connected: true,
+    eliminated: false,
+    isBot: true
+  });
+  return {
+    state
+  };
+}
+function mutRemoveBot(state, byId, botId) {
+  if (state.phase !== 'lobby') return {
+    error: 'La partie a déjà commencé.'
+  };
+  if (state.hostId !== byId) return {
+    error: "Seul l'hôte peut retirer un bot."
+  };
+  state.players = state.players.filter(p => p.id !== botId);
+  return {
+    state
+  };
+}
 
 // ---------------------------------------------------------------------------
-// UI atoms
+// Bot AI (single tier for now — calibrate before adding difficulty levels)
+// ---------------------------------------------------------------------------
+const BOT_CALL_THRESHOLD = 5; // more conservative than the max allowed (9), to reduce Assaf risk
+const BOT_PICKUP_MAX_VALUE = 4; // only takes the discard pile if it's a cheap card
+
+function allSubsets(arr) {
+  const result = [[]];
+  for (const item of arr) {
+    const len = result.length;
+    for (let i = 0; i < len; i++) result.push([...result[i], item]);
+  }
+  return result;
+}
+function botBestDiscard(hand) {
+  let best = [hand[0]];
+  let bestScore = -Infinity;
+  for (const combo of allSubsets(hand)) {
+    if (combo.length === 0 || !isValidDiscard(combo)) continue;
+    const val = combo.reduce((sum, c) => sum + valueOf(c), 0);
+    const score = val * 100 + combo.length; // shed the most value; break ties toward bigger combos
+    if (score > bestScore) {
+      bestScore = score;
+      best = combo;
+    }
+  }
+  return best;
+}
+function botChooseDrawSource(state) {
+  const pickup = state.turnStartPickup;
+  if (!pickup) return 'deck';
+  return valueOf(pickup) <= BOT_PICKUP_MAX_VALUE ? 'discard' : 'deck';
+}
+function botChooseMove(state, botId) {
+  const bot = state.players.find(p => p.id === botId);
+  const handVal = handValue(bot.hand);
+  if (handVal <= BOT_CALL_THRESHOLD) return {
+    type: 'call'
+  };
+  const cardIds = botBestDiscard(bot.hand);
+  const source = botChooseDrawSource(state);
+  return {
+    type: 'play',
+    cardIds,
+    source
+  };
+}
 // ---------------------------------------------------------------------------
 function Shell({
   children,
@@ -685,6 +767,8 @@ function Lobby({
   myId,
   isHost,
   onStart,
+  onAddBot,
+  onRemoveBot,
   busy,
   error
 }) {
@@ -721,7 +805,7 @@ function Lobby({
       display: 'flex',
       flexDirection: 'column',
       gap: 8,
-      marginBottom: 20
+      marginBottom: 14
     }
   }, room.players.map(p => /*#__PURE__*/React.createElement("div", {
     key: p.id,
@@ -746,7 +830,7 @@ function Lobby({
       fontWeight: 700,
       fontSize: 14
     }
-  }, p.name[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", {
+  }, p.isBot ? '🤖' : p.name[0]?.toUpperCase()), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
@@ -756,7 +840,22 @@ function Lobby({
       color: '#d99a3c',
       fontWeight: 700
     }
-  }, "HÔTE")))), /*#__PURE__*/React.createElement("div", {
+  }, "HÔTE"), isHost && p.isBot && /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-secondary",
+    style: {
+      padding: '4px 10px',
+      fontSize: 12
+    },
+    onClick: () => onRemoveBot(p.id)
+  }, "Retirer")))), isHost && /*#__PURE__*/React.createElement("button", {
+    className: "bo-btn bo-btn-secondary",
+    style: {
+      width: '100%',
+      marginBottom: 20
+    },
+    disabled: busy || room.players.length >= 10,
+    onClick: onAddBot
+  }, "+ Ajouter un bot 🤖"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: '#5c6773',
@@ -1782,6 +1881,21 @@ function App() {
   const me = room?.players.find(p => p.id === myId);
   const isHost = room?.hostId === myId;
   const isMyTurn = room?.currentPlayerId === myId;
+  const botActingRef = useRef(null);
+  useEffect(() => {
+    if (!room || room.phase !== 'playing' || !isHost) return;
+    const current = room.players.find(p => p.id === room.currentPlayerId);
+    if (!current || !current.isBot) return;
+    const signature = room.currentPlayerId + ':' + room.turnPhase + ':' + (room.lastAction ? room.lastAction.seq : 0);
+    if (botActingRef.current === signature) return;
+    botActingRef.current = signature;
+    const delay = 1100 + Math.random() * 900;
+    const timer = setTimeout(() => {
+      const move = botChooseMove(room, current.id);
+      if (move.type === 'call') act(s => mutCallBolivienne(s, current.id));else act(s => mutPlayTurn(s, current.id, move.cardIds, move.source));
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [room, isHost]);
   function toggleCard(c) {
     if (!isMyTurn || room.turnPhase !== 'discard') return;
     setSelected(sel => sel.includes(c) ? sel.filter(x => x !== c) : [...sel, c]);
@@ -1813,6 +1927,8 @@ function App() {
     myId: myId,
     isHost: isHost,
     onStart: () => act(s => mutStartGame(s, myId)),
+    onAddBot: () => act(s => mutAddBot(s, myId)),
+    onRemoveBot: botId => act(s => mutRemoveBot(s, myId, botId)),
     busy: busy,
     error: error
   });else if (room.phase === 'playing') {
