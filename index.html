@@ -1361,23 +1361,16 @@ function GameTable({
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
+      gap: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: others.length > 1 ? 'space-between' : 'center',
+      alignItems: 'flex-start',
       gap: 10
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: '0 0 auto',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 22,
-      alignItems: 'center'
-    }
-  }, others.filter((_, i) => i % 2 === 0).map(p => {
+  }, others.map(p => {
     const isTurn = room.currentPlayerId === p.id;
     const visibleCount = p.hand.filter(c => !hiddenCards.has(c)).length;
     return /*#__PURE__*/React.createElement("div", {
@@ -1387,12 +1380,11 @@ function GameTable({
       },
       style: {
         textAlign: 'center',
-        width: 96
+        width: 110
       }
     }, /*#__PURE__*/React.createElement(FannedBacks, {
       count: visibleCount,
-      size: "sm",
-      vertical: true
+      size: "sm"
     }), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
@@ -1418,19 +1410,10 @@ function GameTable({
     }, visibleCount, " cartes", isTurn ? ' · à son tour' : ''));
   })), /*#__PURE__*/React.createElement("div", {
     style: {
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
       display: 'flex',
       justifyContent: 'center',
-      gap: 18,
-      alignItems: 'flex-end',
-      flexWrap: 'wrap'
+      gap: 30,
+      alignItems: 'flex-end'
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: deckRef,
@@ -1493,54 +1476,7 @@ function GameTable({
       color: '#e2ecdf',
       marginTop: 5
     }
-  }, "Défausse", pileFan.length > 1 ? ` (${pileFan.length})` : '')))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: '0 0 auto',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 22,
-      alignItems: 'center'
-    }
-  }, others.filter((_, i) => i % 2 === 1).map(p => {
-    const isTurn = room.currentPlayerId === p.id;
-    const visibleCount = p.hand.filter(c => !hiddenCards.has(c)).length;
-    return /*#__PURE__*/React.createElement("div", {
-      key: p.id,
-      ref: el => {
-        oppRefsMap.current[p.id] = el;
-      },
-      style: {
-        textAlign: 'center',
-        width: 96
-      }
-    }, /*#__PURE__*/React.createElement(FannedBacks, {
-      count: visibleCount,
-      size: "sm",
-      vertical: true
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        marginTop: 4
-      }
-    }, /*#__PURE__*/React.createElement(ScoreBadge, {
-      score: p.score
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 12.5,
-        fontWeight: 700,
-        color: isTurn ? '#f0c987' : '#ece6d6'
-      }
-    }, p.name)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 10.5,
-        color: '#cfe0d4',
-        marginTop: 2
-      }
-    }, visibleCount, " cartes", isTurn ? ' · à son tour' : ''));
-  }))), !iAmEliminated && canCall && /*#__PURE__*/React.createElement("div", {
+  }, "Défausse", pileFan.length > 1 ? ` (${pileFan.length})` : ''))), !iAmEliminated && canCall && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'center'
