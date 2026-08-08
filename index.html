@@ -956,12 +956,19 @@ function Lobby({
 function FannedBacks({
   count,
   size,
-  vertical
+  vertical,
+  maxWidth
 }) {
-  const shown = Math.min(count, 7);
+  const shown = count;
   const w = CARD_SIZES[size || 'sm'];
   const h = cardH(w);
-  const step = vertical ? h * 0.26 : w * 0.4;
+  let step = vertical ? h * 0.26 : w * 0.32;
+  if (!vertical && maxWidth && shown > 1) {
+    const natural = w + (shown - 1) * step;
+    if (natural > maxWidth) {
+      step = Math.max(w * 0.16, (maxWidth - w) / (shown - 1));
+    }
+  }
   const boxW = vertical ? w : w + Math.max(0, shown - 1) * step;
   const boxH = vertical ? h + Math.max(0, shown - 1) * step : h;
   return /*#__PURE__*/React.createElement("div", {
@@ -986,12 +993,14 @@ function FannedBacks({
   }))));
 }
 function ScoreBadge({
-  score
+  score,
+  small
 }) {
+  const d = small ? 24 : 30;
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 30,
-      height: 30,
+      width: d,
+      height: d,
       borderRadius: '50%',
       background: '#1a6b8a',
       color: '#eaf6ff',
@@ -999,7 +1008,7 @@ function ScoreBadge({
       alignItems: 'center',
       justifyContent: 'center',
       fontWeight: 800,
-      fontSize: 13,
+      fontSize: small ? 11 : 13,
       border: '2px solid #2f8fb5',
       flexShrink: 0
     }
@@ -1366,9 +1375,10 @@ function GameTable({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      justifyContent: others.length > 1 ? 'space-between' : 'center',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
       alignItems: 'flex-start',
-      gap: 10
+      gap: '14px 18px'
     }
   }, others.map(p => {
     const isTurn = room.currentPlayerId === p.id;
@@ -1380,34 +1390,39 @@ function GameTable({
       },
       style: {
         textAlign: 'center',
-        width: 110
+        width: 78
       }
     }, /*#__PURE__*/React.createElement(FannedBacks, {
       count: visibleCount,
-      size: "sm"
+      size: "sm",
+      maxWidth: 78
     }), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
+        gap: 5,
         marginTop: 4
       }
     }, /*#__PURE__*/React.createElement(ScoreBadge, {
-      score: p.score
+      score: p.score,
+      small: true
     }), /*#__PURE__*/React.createElement("span", {
       style: {
-        fontSize: 12.5,
+        fontSize: 11.5,
         fontWeight: 700,
-        color: isTurn ? '#f0c987' : '#ece6d6'
+        color: isTurn ? '#f0c987' : '#ece6d6',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
       }
     }, p.name)), /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: 10.5,
+        fontSize: 10,
         color: '#cfe0d4',
         marginTop: 2
       }
-    }, visibleCount, " cartes", isTurn ? ' · à son tour' : ''));
+    }, visibleCount, " cartes", isTurn ? ' · tour' : ''));
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
